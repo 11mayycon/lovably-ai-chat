@@ -58,7 +58,7 @@ const LandingPage = () => {
           </div>
           <Button 
             variant="outline" 
-            onClick={() => navigate('/login')}
+            onClick={() => navigate('/support-login')}
             className="border-white/20 text-white hover:bg-white/10"
           >
             Entrar
