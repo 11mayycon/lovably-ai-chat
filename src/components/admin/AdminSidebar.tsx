@@ -1,9 +1,22 @@
-import { Link, useLocation } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { Bot, LayoutDashboard, MessageSquare, Brain, Users, BarChart3, Settings, LogOut, Moon, Sun } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "next-themes";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarSeparator,
+  useSidebar,
+} from "@/components/ui/sidebar";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin/dashboard" },
@@ -18,75 +31,90 @@ export const AdminSidebar = () => {
   const location = useLocation();
   const { signOut, user } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { open } = useSidebar();
 
   return (
-    <div className="w-64 h-screen bg-card border-r border-border flex flex-col">
+    <Sidebar collapsible="icon">
       {/* Logo */}
-      <div className="p-6 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-primary rounded-lg">
-            <Bot className="w-6 h-6 text-white" />
+      <SidebarHeader>
+        <div className="flex items-center gap-3 px-2 py-2">
+          <div className="p-2 bg-gradient-primary rounded-lg flex-shrink-0">
+            <Bot className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <h1 className="text-xl font-bold">ISA 2.5</h1>
-            <p className="text-xs text-muted-foreground">InovaPro Tech</p>
-          </div>
+          {open && (
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold truncate">ISA 2.5</h1>
+              <p className="text-xs text-muted-foreground truncate">InovaPro Tech</p>
+            </div>
+          )}
         </div>
-      </div>
+      </SidebarHeader>
 
       {/* Menu Items */}
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-        {menuItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location.pathname === item.path;
-          
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-lg transition-all",
-                isActive
-                  ? "bg-primary text-primary-foreground shadow-md"
-                  : "text-foreground hover:bg-accent"
-              )}
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Menu Principal</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+
+                return (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
+                      <NavLink to={item.path}>
+                        <Icon />
+                        <span>{item.label}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter>
+        {/* Theme Toggle */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              tooltip={`Tema ${theme === "dark" ? "Claro" : "Escuro"}`}
             >
-              <Icon className="w-5 h-5" />
-              <span className="font-medium">{item.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+              {theme === "dark" ? <Sun /> : <Moon />}
+              <span>Tema {theme === "dark" ? "Claro" : "Escuro"}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
 
-      {/* Theme Toggle */}
-      <div className="p-4 border-t border-border">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="w-full justify-start gap-3"
-        >
-          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          <span>Tema {theme === "dark" ? "Claro" : "Escuro"}</span>
-        </Button>
-      </div>
+        <SidebarSeparator />
 
-      {/* User Profile */}
-      <div className="p-4 border-t border-border">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold">
-            {user?.email?.[0].toUpperCase() || "A"}
-          </div>
-          <div className="flex-1">
-            <p className="font-medium text-sm">Administrador</p>
-            <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-          </div>
-        </div>
-        <Button variant="destructive" size="sm" className="w-full justify-start gap-3" onClick={signOut}>
-          <LogOut className="w-4 h-4" />
-          <span>Sair</span>
-        </Button>
-      </div>
-    </div>
+        {/* User Profile */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <div className="flex items-center gap-3 px-2 py-2">
+              <div className="w-8 h-8 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                {user?.email?.[0].toUpperCase() || "A"}
+              </div>
+              {open && (
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-xs truncate">Administrador</p>
+                  <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                </div>
+              )}
+            </div>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={signOut} tooltip="Sair">
+              <LogOut />
+              <span>Sair</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
   );
 };

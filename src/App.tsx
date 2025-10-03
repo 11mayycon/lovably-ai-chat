@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "next-themes";
+import { AdminLayout } from "./components/admin/AdminLayout";
 import Login from "./pages/Login";
 import Setup from "./pages/Setup";
 import Dashboard from "./pages/admin/Dashboard";
@@ -31,12 +32,12 @@ const App = () => (
             <Route path="/" element={<Navigate to="/setup" replace />} />
             <Route path="/setup" element={<Setup />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/admin/dashboard" element={<Dashboard />} />
-            <Route path="/admin/whatsapp" element={<WhatsAppConnection />} />
-            <Route path="/admin/ai-memory" element={<AIMemory />} />
-            <Route path="/admin/support" element={<ManageSupport />} />
-            <Route path="/admin/reports" element={<Reports />} />
-            <Route path="/admin/settings" element={<Settings />} />
+            <Route path="/admin/dashboard" element={<AdminLayout><Dashboard /></AdminLayout>} />
+            <Route path="/admin/whatsapp" element={<AdminLayout><WhatsAppConnection /></AdminLayout>} />
+            <Route path="/admin/ai-memory" element={<AdminLayout><AIMemory /></AdminLayout>} />
+            <Route path="/admin/support" element={<AdminLayout><ManageSupport /></AdminLayout>} />
+            <Route path="/admin/reports" element={<AdminLayout><Reports /></AdminLayout>} />
+            <Route path="/admin/settings" element={<AdminLayout><Settings /></AdminLayout>} />
             <Route path="/support/select-room" element={<SelectRoom />} />
             <Route path="/support/chat" element={<Chat />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

@@ -1,4 +1,3 @@
-import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Bot, CheckCircle, Calendar, Users, TrendingUp, TrendingDown, Activity, BarChart3 } from "lucide-react";
 
@@ -51,11 +50,7 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <AdminSidebar />
-      
-      <main className="flex-1 overflow-y-auto">
-        <div className="p-8 space-y-8">
+    <div className="space-y-8">
           {/* Header */}
           <div>
             <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
@@ -220,8 +215,6 @@ const Dashboard = () => {
               </CardContent>
             </Card>
           </div>
-        </div>
-      </main>
     </div>
   );
 };
