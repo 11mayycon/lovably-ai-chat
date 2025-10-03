@@ -6,6 +6,10 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "next-themes";
 import { AdminLayout } from "./components/admin/AdminLayout";
+import LandingPage from "./pages/LandingPage";
+import SignupPage from "./pages/SignupPage";
+import LoginPage from "./pages/LoginPage";
+import DashboardPage from "./pages/DashboardPage";
 import SupportLogin from "./pages/SupportLogin";
 import AdminLogin from "./pages/AdminLogin";
 import Setup from "./pages/Setup";
@@ -31,7 +35,11 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
           <Routes>
-            <Route path="/" element={<SupportLogin />} />
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/cadastro" element={<SignupPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/painel" element={<DashboardPage />} />
+            <Route path="/support-login" element={<SupportLogin />} />
             <Route path="/setup" element={<Setup />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin/dashboard" element={<AdminLayout><Dashboard /></AdminLayout>} />
