@@ -17,6 +17,10 @@ export default function WhatsAppConnection() {
 
   const loadConnection = async () => {
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
       // Verificar status real da Evolution API usando função unificada
       const { data: statusResponse } = await supabase.functions.invoke('evolution', {
         body: { action: 'checkStatus' }
@@ -25,6 +29,7 @@ export default function WhatsAppConnection() {
       const { data, error } = await supabase
         .from("whatsapp_connections")
         .select("*")
+        .eq("admin_user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -102,13 +107,21 @@ export default function WhatsAppConnection() {
 
       setQrCode(qrCodeImage);
 
+      // Get current user and generate matricula
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      const matricula = `WA-${Date.now().toString(36).toUpperCase()}`;
+
       if (!connection) {
         const { error } = await supabase
           .from("whatsapp_connections")
           .insert({
             instance_name: "isa25",
             qr_code: qrCodeImage,
-            status: "waiting"
+            status: "waiting",
+            admin_user_id: user.id,
+            matricula: matricula
           });
 
         if (error) throw error;
@@ -293,6 +306,10 @@ export default function WhatsAppConnection() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Matrícula</p>
+                <p className="font-mono font-medium text-primary">{connection.matricula || "N/A"}</p>
+              </div>
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Número</p>
                 <p className="font-medium">{connection.phone_number || "+55 (00) 00000-0000"}</p>

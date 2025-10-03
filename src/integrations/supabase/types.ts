@@ -85,6 +85,7 @@ export type Database = {
           status: string
           tags: string[] | null
           updated_at: string | null
+          whatsapp_connection_id: string | null
         }
         Insert: {
           agent_id?: string | null
@@ -102,6 +103,7 @@ export type Database = {
           status?: string
           tags?: string[] | null
           updated_at?: string | null
+          whatsapp_connection_id?: string | null
         }
         Update: {
           agent_id?: string | null
@@ -119,6 +121,7 @@ export type Database = {
           status?: string
           tags?: string[] | null
           updated_at?: string | null
+          whatsapp_connection_id?: string | null
         }
         Relationships: [
           {
@@ -126,6 +129,13 @@ export type Database = {
             columns: ["room_id"]
             isOneToOne: false
             referencedRelation: "support_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendances_whatsapp_connection_id_fkey"
+            columns: ["whatsapp_connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
             referencedColumns: ["id"]
           },
         ]
@@ -328,6 +338,7 @@ export type Database = {
       }
       support_rooms: {
         Row: {
+          admin_owner_id: string | null
           created_at: string | null
           description: string | null
           id: string
@@ -337,6 +348,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          admin_owner_id?: string | null
           created_at?: string | null
           description?: string | null
           id?: string
@@ -346,6 +358,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          admin_owner_id?: string | null
           created_at?: string | null
           description?: string | null
           id?: string
@@ -420,36 +433,53 @@ export type Database = {
       }
       whatsapp_connections: {
         Row: {
+          admin_user_id: string | null
           created_at: string | null
           id: string
           instance_name: string
           last_connection: string | null
+          matricula: string | null
           phone_number: string | null
           qr_code: string | null
           status: string
+          support_room_id: string | null
           updated_at: string | null
         }
         Insert: {
+          admin_user_id?: string | null
           created_at?: string | null
           id?: string
           instance_name: string
           last_connection?: string | null
+          matricula?: string | null
           phone_number?: string | null
           qr_code?: string | null
           status?: string
+          support_room_id?: string | null
           updated_at?: string | null
         }
         Update: {
+          admin_user_id?: string | null
           created_at?: string | null
           id?: string
           instance_name?: string
           last_connection?: string | null
+          matricula?: string | null
           phone_number?: string | null
           qr_code?: string | null
           status?: string
+          support_room_id?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_connections_support_room_id_fkey"
+            columns: ["support_room_id"]
+            isOneToOne: false
+            referencedRelation: "support_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

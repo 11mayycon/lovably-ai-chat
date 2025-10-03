@@ -88,6 +88,10 @@ export default function ManageSupport() {
     }
 
     try {
+      // Get current admin user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
       // Verificar se o usuário já tem uma sala
       const existingRoom = rooms.find(r => r.support_user_id === newRoom.support_user_id);
       if (existingRoom) {
@@ -102,6 +106,7 @@ export default function ManageSupport() {
           support_user_id: newRoom.support_user_id,
           description: newRoom.description,
           max_members: newRoom.max_members,
+          admin_owner_id: user.id
         });
 
       if (error) throw error;
