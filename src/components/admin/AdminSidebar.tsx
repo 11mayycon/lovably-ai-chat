@@ -22,7 +22,8 @@ const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin/dashboard" },
   { icon: MessageSquare, label: "Conectar WhatsApp", path: "/admin/whatsapp" },
   { icon: Brain, label: "Memória da IA", path: "/admin/ai-memory" },
-  { icon: Users, label: "Gerenciar Suporte", path: "/admin/support" },
+  { icon: Users, label: "Usuários de Suporte", path: "/admin/support-users" },
+  { icon: Users, label: "Gerenciar Salas", path: "/admin/support" },
   { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },
   { icon: Settings, label: "Configurações", path: "/admin/settings" },
 ];

@@ -11,6 +11,7 @@ import Setup from "./pages/Setup";
 import Dashboard from "./pages/admin/Dashboard";
 import WhatsAppConnection from "./pages/admin/WhatsAppConnection";
 import AIMemory from "./pages/admin/AIMemory";
+import SupportUsers from "./pages/admin/SupportUsers";
 import ManageSupport from "./pages/admin/ManageSupport";
 import Reports from "./pages/admin/Reports";
 import Settings from "./pages/admin/Settings";
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/admin/dashboard" element={<AdminLayout><Dashboard /></AdminLayout>} />
             <Route path="/admin/whatsapp" element={<AdminLayout><WhatsAppConnection /></AdminLayout>} />
             <Route path="/admin/ai-memory" element={<AdminLayout><AIMemory /></AdminLayout>} />
+            <Route path="/admin/support-users" element={<AdminLayout><SupportUsers /></AdminLayout>} />
             <Route path="/admin/support" element={<AdminLayout><ManageSupport /></AdminLayout>} />
             <Route path="/admin/reports" element={<AdminLayout><Reports /></AdminLayout>} />
             <Route path="/admin/settings" element={<AdminLayout><Settings /></AdminLayout>} />

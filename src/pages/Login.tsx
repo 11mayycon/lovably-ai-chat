@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
   const { signIn } = useAuth();
+  const navigate = useNavigate();
   const [userType, setUserType] = useState<"admin" | "support">("admin");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -145,7 +147,10 @@ const Login = () => {
 
             <button
               type="button"
-              onClick={() => setUserType("support")}
+              onClick={() => {
+                setUserType("support");
+                navigate("/support/select-room");
+              }}
               className={`flex-1 p-6 rounded-xl border-2 transition-all ${
                 userType === "support"
                   ? "border-secondary bg-secondary/5 shadow-lg scale-105"
@@ -162,7 +167,7 @@ const Login = () => {
                 </div>
                 <div>
                   <p className="font-bold text-lg">SUPORTE</p>
-                  <p className="text-xs text-muted-foreground">Atendimento ao cliente</p>
+                  <p className="text-xs text-muted-foreground">Login por matrícula</p>
                 </div>
               </div>
             </button>

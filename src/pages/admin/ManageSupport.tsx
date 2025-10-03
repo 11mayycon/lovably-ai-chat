@@ -13,62 +13,93 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Plus, Users, Lock, Eye, EyeOff, Edit, Trash2, Circle } from "lucide-react";
+import { Plus, Users, Edit, Trash2, Circle, IdCard } from "lucide-react";
 
 export default function ManageSupport() {
   const [rooms, setRooms] = useState<any[]>([]);
+  const [supportUsers, setSupportUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [newRoom, setNewRoom] = useState({
     name: "",
-    password: "",
+    support_user_id: "",
     description: "",
     max_members: 10,
   });
 
   useEffect(() => {
-    loadRooms();
+    loadData();
   }, []);
 
-  const loadRooms = async () => {
+  const loadData = async () => {
     try {
-      const { data, error } = await supabase
+      // Carregar salas com informações do usuário de suporte
+      const { data: roomsData, error: roomsError } = await supabase
         .from("support_rooms")
         .select(`
           *,
+          support_users (
+            id,
+            full_name,
+            email,
+            matricula,
+            phone
+          ),
           room_members (
             user_id,
-            is_online,
-            profiles (full_name, email)
+            is_online
           )
         `)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setRooms(data || []);
+      if (roomsError) throw roomsError;
+      setRooms(roomsData || []);
+
+      // Carregar usuários de suporte ativos
+      const { data: usersData, error: usersError } = await supabase
+        .from("support_users")
+        .select("*")
+        .eq("is_active", true)
+        .order("full_name");
+
+      if (usersError) throw usersError;
+      setSupportUsers(usersData || []);
     } catch (error) {
-      console.error("Erro ao carregar salas:", error);
-      toast.error("Erro ao carregar salas");
+      console.error("Erro ao carregar dados:", error);
+      toast.error("Erro ao carregar dados");
     } finally {
       setLoading(false);
     }
   };
 
   const createRoom = async () => {
-    if (!newRoom.name || !newRoom.password) {
-      toast.error("Nome e senha são obrigatórios");
+    if (!newRoom.name || !newRoom.support_user_id) {
+      toast.error("Nome e usuário são obrigatórios");
       return;
     }
 
     try {
+      // Verificar se o usuário já tem uma sala
+      const existingRoom = rooms.find(r => r.support_user_id === newRoom.support_user_id);
+      if (existingRoom) {
+        toast.error("Este usuário já possui uma sala atribuída");
+        return;
+      }
+
       const { error } = await supabase
         .from("support_rooms")
         .insert({
           name: newRoom.name,
-          password: newRoom.password,
+          support_user_id: newRoom.support_user_id,
           description: newRoom.description,
           max_members: newRoom.max_members,
         });
@@ -77,8 +108,8 @@ export default function ManageSupport() {
 
       toast.success("Sala criada com sucesso!");
       setIsCreateOpen(false);
-      setNewRoom({ name: "", password: "", description: "", max_members: 10 });
-      loadRooms();
+      setNewRoom({ name: "", support_user_id: "", description: "", max_members: 10 });
+      loadData();
     } catch (error) {
       console.error("Erro ao criar sala:", error);
       toast.error("Erro ao criar sala");
@@ -97,7 +128,7 @@ export default function ManageSupport() {
       if (error) throw error;
 
       toast.success("Sala excluída com sucesso!");
-      loadRooms();
+      loadData();
     } catch (error) {
       console.error("Erro ao excluir sala:", error);
       toast.error("Erro ao excluir sala");
@@ -113,10 +144,10 @@ export default function ManageSupport() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-2 bg-gradient-primary bg-clip-text text-transparent">
-            Gerenciar Suporte
+            Gerenciar Salas
           </h1>
           <p className="text-muted-foreground">
-            Crie e gerencie salas de atendimento para sua equipe
+            Crie e gerencie salas de atendimento vinculadas aos usuários
           </p>
         </div>
 
@@ -131,7 +162,7 @@ export default function ManageSupport() {
             <DialogHeader>
               <DialogTitle>Criar Nova Sala</DialogTitle>
               <DialogDescription>
-                Configure uma nova sala de atendimento para sua equipe
+                Selecione um usuário de suporte para vincular à sala
               </DialogDescription>
             </DialogHeader>
 
@@ -147,29 +178,38 @@ export default function ManageSupport() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Senha de Acesso *</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Senha para entrar na sala"
-                    value={newRoom.password}
-                    onChange={(e) => setNewRoom({ ...newRoom, password: e.target.value })}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-4 h-4" />
+                <Label htmlFor="support_user">Usuário de Suporte *</Label>
+                <Select
+                  value={newRoom.support_user_id}
+                  onValueChange={(value) => setNewRoom({ ...newRoom, support_user_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um usuário" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {supportUsers.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-muted-foreground">
+                        Nenhum usuário disponível.
+                        <br />
+                        Crie usuários em "Usuários de Suporte"
+                      </div>
                     ) : (
-                      <Eye className="w-4 h-4" />
+                      supportUsers.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          <div className="flex items-center gap-2">
+                            <span>{user.full_name}</span>
+                            <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                              {user.matricula}
+                            </code>
+                          </div>
+                        </SelectItem>
+                      ))
                     )}
-                  </Button>
-                </div>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  O usuário poderá acessar a sala usando sua matrícula
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -199,7 +239,7 @@ export default function ManageSupport() {
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={createRoom}>
+              <Button onClick={createRoom} disabled={supportUsers.length === 0}>
                 Criar Sala
               </Button>
             </DialogFooter>
@@ -218,17 +258,24 @@ export default function ManageSupport() {
           <Card>
             <CardContent className="py-12 text-center">
               <Users className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground mb-4">Nenhuma sala criada ainda</p>
-              <Button onClick={() => setIsCreateOpen(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Criar Primeira Sala
-              </Button>
+              <p className="text-muted-foreground mb-2">Nenhuma sala criada ainda</p>
+              {supportUsers.length === 0 ? (
+                <p className="text-sm text-muted-foreground mb-4">
+                  Crie usuários de suporte primeiro em "Usuários de Suporte"
+                </p>
+              ) : (
+                <Button onClick={() => setIsCreateOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Criar Primeira Sala
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
           rooms.map((room) => {
             const onlineMembers = getOnlineMembers(room);
             const isOnline = onlineMembers.length > 0;
+            const supportUser = room.support_users;
 
             return (
               <Card key={room.id} className="border-2">
@@ -260,15 +307,43 @@ export default function ManageSupport() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Lock className="w-4 h-4" />
-                        <span>Senha</span>
+                  {/* Informações do usuário vinculado */}
+                  {supportUser && (
+                    <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <IdCard className="w-5 h-5 text-primary mt-0.5" />
+                        <div className="flex-1">
+                          <p className="font-medium text-sm mb-2">Usuário Vinculado</p>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Nome:</span>
+                              <p className="font-medium">{supportUser.full_name}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Matrícula:</span>
+                              <p>
+                                <code className="px-2 py-1 bg-muted rounded font-mono">
+                                  {supportUser.matricula}
+                                </code>
+                              </p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Email:</span>
+                              <p className="font-medium">{supportUser.email}</p>
+                            </div>
+                            {supportUser.phone && (
+                              <div>
+                                <span className="text-muted-foreground">Telefone:</span>
+                                <p className="font-medium">{supportUser.phone}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <p className="font-mono">••••••••</p>
                     </div>
+                  )}
 
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Users className="w-4 h-4" />
@@ -292,20 +367,14 @@ export default function ManageSupport() {
                         </span>
                       </div>
                     </div>
-                  </div>
 
-                  {onlineMembers.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium mb-2">Membros Online:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {onlineMembers.map((member: any) => (
-                          <Badge key={member.user_id} variant="secondary">
-                            {member.profiles?.full_name || member.profiles?.email || "Agente"}
-                          </Badge>
-                        ))}
-                      </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Criada em</p>
+                      <p className="text-sm font-medium">
+                        {new Date(room.created_at).toLocaleDateString("pt-BR")}
+                      </p>
                     </div>
-                  )}
+                  </div>
                 </CardContent>
               </Card>
             );

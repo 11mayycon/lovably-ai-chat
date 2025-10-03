@@ -252,7 +252,7 @@ export type Database = {
           id: string
           max_members: number | null
           name: string
-          password: string
+          support_user_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -261,7 +261,7 @@ export type Database = {
           id?: string
           max_members?: number | null
           name: string
-          password: string
+          support_user_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -270,7 +270,48 @@ export type Database = {
           id?: string
           max_members?: number | null
           name?: string
-          password?: string
+          support_user_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_rooms_support_user_id_fkey"
+            columns: ["support_user_id"]
+            isOneToOne: false
+            referencedRelation: "support_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_users: {
+        Row: {
+          created_at: string | null
+          email: string
+          full_name: string
+          id: string
+          is_active: boolean | null
+          matricula: string
+          phone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          full_name: string
+          id?: string
+          is_active?: boolean | null
+          matricula: string
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          full_name?: string
+          id?: string
+          is_active?: boolean | null
+          matricula?: string
+          phone?: string | null
           updated_at?: string | null
         }
         Relationships: []
