@@ -37,6 +37,7 @@ serve(async (req) => {
       },
       success_url: `${req.headers.get("origin")}/login?success=true`,
       cancel_url: `${req.headers.get("origin")}/cadastro?canceled=true`,
+      allow_promotion_codes: true,
     });
 
     return new Response(

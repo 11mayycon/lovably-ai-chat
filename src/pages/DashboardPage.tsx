@@ -81,7 +81,7 @@ const DashboardPage = () => {
           body: {
             userId: user.id,
             email: subscription?.email,
-            priceId: "price_1SaHCBLWyC4uRc8xTGFqP9Vm",
+            priceId: "price_1SA2vELWyC4uRc8xY7TKWEzK",
           },
         }
       );

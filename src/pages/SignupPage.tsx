@@ -64,7 +64,7 @@ const SignupPage = () => {
           body: {
             userId: authData.user.id,
             email: formData.email,
-            priceId: "price_1SaHCBLWyC4uRc8xTGFqP9Vm", // ISA 2.5 price ID
+            priceId: "price_1SA2vELWyC4uRc8xY7TKWEzK", // ISA 2.5 price ID
           },
         }
       );
