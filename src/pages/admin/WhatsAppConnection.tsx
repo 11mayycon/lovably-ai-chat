@@ -82,12 +82,22 @@ export default function WhatsAppConnection() {
 
       // O QR Code vem em result
       const instances = qrData.result;
-      const qrCodeImage = instances[0]?.instance?.qrcode?.base64 || 
-                         instances[0]?.qrcode?.base64 ||
-                         instances[0]?.instance?.qr;
-      
+      let qrCodeImage: string | undefined =
+        instances?.[0]?.instance?.qrcode?.base64 ||
+        instances?.[0]?.qrcode?.base64 ||
+        instances?.[0]?.instance?.qr ||
+        instances?.[0]?.qr ||
+        qrData?.qrcode?.base64 ||
+        qrData?.base64 ||
+        qrData?.qr;
+
       if (!qrCodeImage) {
         throw new Error('QR Code não retornado pela API');
+      }
+
+      // Garantir prefixo data URL para renderização
+      if (qrCodeImage && !qrCodeImage.startsWith('data:image')) {
+        qrCodeImage = `data:image/png;base64,${qrCodeImage}`;
       }
 
       setQrCode(qrCodeImage);

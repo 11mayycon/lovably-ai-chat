@@ -40,7 +40,9 @@ Deno.serve(async (req) => {
     switch (action) {
       case 'getQR': {
         console.log('[Evolution] Getting QR Code...');
-        const response = await fetch(
+
+        // 1) Buscar informações da instância
+        const instancesRes = await fetch(
           `${EVO_BASE_URL}/instance/fetchInstances?instanceName=${EVO_SESSION}`,
           {
             method: 'GET',
@@ -51,13 +53,51 @@ Deno.serve(async (req) => {
           }
         );
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('[Evolution] QR fetch error:', errorText);
-          throw new Error(`Evolution API error: ${response.status} - ${errorText}`);
+        if (!instancesRes.ok) {
+          const errorText = await instancesRes.text();
+          console.error('[Evolution] Instances fetch error:', errorText);
+          throw new Error(`Evolution API error: ${instancesRes.status} - ${errorText}`);
         }
 
-        result = await response.json();
+        const instances = await instancesRes.json();
+
+        // 2) Solicitar o QR Code no endpoint de conexão
+        const connectRes = await fetch(
+          `${EVO_BASE_URL}/instance/connect/${EVO_SESSION}`,
+          {
+            method: 'GET',
+            headers: {
+              'apikey': EVO_API_KEY,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        if (!connectRes.ok) {
+          const errorText = await connectRes.text();
+          console.error('[Evolution] Connect error:', errorText);
+          throw new Error(`Evolution API error: ${connectRes.status} - ${errorText}`);
+        }
+
+        const connectJson = await connectRes.json();
+
+        // 3) Extrair o base64 de forma resiliente e garantir prefixo data URL
+        let base64: string | undefined =
+          connectJson?.qrcode?.base64 ||
+          connectJson?.base64 ||
+          connectJson?.qr ||
+          connectJson?.qrcode;
+
+        if (typeof base64 === 'string' && !base64.startsWith('data:image')) {
+          base64 = `data:image/png;base64,${base64}`;
+        }
+
+        // 4) Anexar o QR Code ao primeiro item da lista, se existir
+        if (Array.isArray(instances) && instances.length > 0) {
+          (instances[0] as any).qrcode = { base64 };
+        }
+
+        result = instances;
         console.log('[Evolution] QR Code fetched successfully');
         break;
       }
