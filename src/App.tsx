@@ -20,6 +20,7 @@ import SupportUsers from "./pages/admin/SupportUsers";
 import ManageSupport from "./pages/admin/ManageSupport";
 import Reports from "./pages/admin/Reports";
 import Settings from "./pages/admin/Settings";
+import UsersManagement from "./pages/admin/UsersManagement";
 import RoomsList from "./pages/support/RoomsList";
 import Chat from "./pages/support/Chat";
 import NotFound from "./pages/NotFound";
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="/setup" element={<Setup />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin/dashboard" element={<AdminLayout><Dashboard /></AdminLayout>} />
+            <Route path="/admin/users" element={<AdminLayout><UsersManagement /></AdminLayout>} />
             <Route path="/admin/whatsapp" element={<AdminLayout><WhatsAppConnection /></AdminLayout>} />
             <Route path="/admin/ai-memory" element={<AdminLayout><AIMemory /></AdminLayout>} />
             <Route path="/admin/support-users" element={<AdminLayout><SupportUsers /></AdminLayout>} />

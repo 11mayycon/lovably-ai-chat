@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Bot, LayoutDashboard, MessageSquare, Brain, Users, BarChart3, Settings, LogOut, Moon, Sun } from "lucide-react";
+import { Bot, LayoutDashboard, MessageSquare, Brain, Users, BarChart3, Settings, LogOut, Moon, Sun, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "next-themes";
@@ -20,6 +20,7 @@ import {
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin/dashboard" },
+  { icon: Shield, label: "Gerenciar Usuários", path: "/admin/users" },
   { icon: MessageSquare, label: "Conectar WhatsApp", path: "/admin/whatsapp" },
   { icon: Brain, label: "Memória da IA", path: "/admin/ai-memory" },
   { icon: Users, label: "Usuários de Suporte", path: "/admin/support-users" },

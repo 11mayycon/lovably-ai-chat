@@ -7,7 +7,7 @@ import { toast } from "sonner";
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  userRole: "admin" | "support" | null;
+  userRole: "admin" | "support" | "super_admin" | null;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   loading: boolean;
@@ -18,7 +18,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [userRole, setUserRole] = useState<"admin" | "support" | null>(null);
+  const [userRole, setUserRole] = useState<"admin" | "support" | "super_admin" | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -90,7 +90,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUserRole(role);
 
     // Navigate based on role
-    if (role === "admin") {
+    if (role === "admin" || role === "super_admin") {
       navigate("/admin/dashboard");
     } else if (role === "support") {
       navigate("/support/select-room");
