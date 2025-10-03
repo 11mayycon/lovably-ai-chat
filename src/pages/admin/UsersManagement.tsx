@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Shield, UserPlus, Lock, Unlock, Calendar, RefreshCw, X } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 
 interface Subscription {
   id: string;
@@ -27,6 +27,8 @@ const UsersManagement = () => {
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [newAdminPassword, setNewAdminPassword] = useState("");
   const [newAdminRole, setNewAdminRole] = useState<"admin" | "support">("admin");
+  const [planName, setPlanName] = useState("");
+  const [planDays, setPlanDays] = useState<number>(30);
 
   useEffect(() => {
     loadSubscriptions();
@@ -67,6 +69,8 @@ const UsersManagement = () => {
           email: newAdminEmail,
           password: newAdminPassword,
           role: newAdminRole,
+          planName,
+          days: planDays,
         },
       });
 

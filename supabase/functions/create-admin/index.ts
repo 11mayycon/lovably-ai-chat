@@ -35,18 +35,22 @@ serve(async (req) => {
       throw new Error("Invalid token");
     }
 
-    // Check if requester is super admin
-    const { data: roleData } = await supabaseAdmin
+    // Check if requester is super admin (handles multiple roles)
+    const { data: rolesData, error: rolesError } = await supabaseAdmin
       .from("user_roles")
       .select("role")
-      .eq("user_id", requester.id)
-      .single();
+      .eq("user_id", requester.id);
 
-    if (roleData?.role !== "super_admin") {
+    if (rolesError) {
+      throw rolesError;
+    }
+
+    const hasSuperAdmin = Array.isArray(rolesData) && rolesData.some((r: any) => r.role === "super_admin");
+    if (!hasSuperAdmin) {
       throw new Error("Unauthorized - Super admin access required");
     }
 
-    const { email, password, role } = await req.json();
+    const { email, password, role, planName, days } = await req.json();
 
     // Create user
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -65,7 +69,24 @@ serve(async (req) => {
         role: role,
       });
 
-    if (roleError) throw roleError;
+    // Optionally create a subscription for the new admin
+    if (planName || days) {
+      const duration = Number(days) || 0;
+      const expiresAt = duration > 0 ? new Date(Date.now() + duration * 24 * 60 * 60 * 1000) : null;
+
+      const { error: subError } = await supabaseAdmin
+        .from("subscriptions")
+        .insert({
+          user_id: authData.user.id,
+          email,
+          status: duration > 0 ? "active" : "pending",
+          expires_at: expiresAt ? expiresAt.toISOString() : null,
+          plan_name: planName || null,
+          duration_days: duration || null,
+        });
+
+      if (subError) throw subError;
+    }
 
     return new Response(
       JSON.stringify({ success: true, user: authData.user }),

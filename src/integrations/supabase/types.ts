@@ -279,11 +279,13 @@ export type Database = {
         Row: {
           company: string | null
           created_at: string
+          duration_days: number | null
           email: string
           expires_at: string | null
           full_name: string | null
           id: string
           phone: string | null
+          plan_name: string | null
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -293,11 +295,13 @@ export type Database = {
         Insert: {
           company?: string | null
           created_at?: string
+          duration_days?: number | null
           email: string
           expires_at?: string | null
           full_name?: string | null
           id?: string
           phone?: string | null
+          plan_name?: string | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -307,11 +311,13 @@ export type Database = {
         Update: {
           company?: string | null
           created_at?: string
+          duration_days?: number | null
           email?: string
           expires_at?: string | null
           full_name?: string | null
           id?: string
           phone?: string | null
+          plan_name?: string | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
