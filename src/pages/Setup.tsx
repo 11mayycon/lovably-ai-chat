@@ -58,7 +58,7 @@ const Setup = () => {
       if (response.ok) {
         toast.success("Administrador criado com sucesso!");
         setTimeout(() => {
-          navigate("/login");
+          navigate("/admin/login");
         }, 2000);
       } else {
         console.error("Error response:", data);
@@ -94,7 +94,7 @@ const Setup = () => {
               O administrador já foi criado anteriormente
             </p>
           </div>
-          <Button onClick={() => navigate("/login")} className="bg-gradient-primary">
+          <Button onClick={() => navigate("/admin/login")} className="bg-gradient-primary">
             IR PARA LOGIN
           </Button>
         </div>

@@ -6,7 +6,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "next-themes";
 import { AdminLayout } from "./components/admin/AdminLayout";
-import Login from "./pages/Login";
+import SupportLogin from "./pages/SupportLogin";
+import AdminLogin from "./pages/AdminLogin";
 import Setup from "./pages/Setup";
 import Dashboard from "./pages/admin/Dashboard";
 import WhatsAppConnection from "./pages/admin/WhatsAppConnection";
@@ -15,7 +16,7 @@ import SupportUsers from "./pages/admin/SupportUsers";
 import ManageSupport from "./pages/admin/ManageSupport";
 import Reports from "./pages/admin/Reports";
 import Settings from "./pages/admin/Settings";
-import SelectRoom from "./pages/support/SelectRoom";
+import RoomsList from "./pages/support/RoomsList";
 import Chat from "./pages/support/Chat";
 import NotFound from "./pages/NotFound";
 
@@ -30,9 +31,9 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
           <Routes>
-            <Route path="/" element={<Navigate to="/setup" replace />} />
+            <Route path="/" element={<SupportLogin />} />
             <Route path="/setup" element={<Setup />} />
-            <Route path="/login" element={<Login />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin/dashboard" element={<AdminLayout><Dashboard /></AdminLayout>} />
             <Route path="/admin/whatsapp" element={<AdminLayout><WhatsAppConnection /></AdminLayout>} />
             <Route path="/admin/ai-memory" element={<AdminLayout><AIMemory /></AdminLayout>} />
@@ -40,7 +41,7 @@ const App = () => (
             <Route path="/admin/support" element={<AdminLayout><ManageSupport /></AdminLayout>} />
             <Route path="/admin/reports" element={<AdminLayout><Reports /></AdminLayout>} />
             <Route path="/admin/settings" element={<AdminLayout><Settings /></AdminLayout>} />
-            <Route path="/support/select-room" element={<SelectRoom />} />
+            <Route path="/support/rooms" element={<RoomsList />} />
             <Route path="/support/chat" element={<Chat />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
