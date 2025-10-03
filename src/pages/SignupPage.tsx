@@ -57,26 +57,9 @@ const SignupPage = () => {
 
       if (subError) throw subError;
 
-      // Create Stripe checkout session
-      const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke(
-        "create-checkout-session",
-        {
-          body: {
-            userId: authData.user.id,
-            email: formData.email,
-            priceId: "price_1SA2vELWyC4uRc8xY7TKWEzK", // ISA 2.5 price ID
-          },
-        }
-      );
-
-      if (checkoutError) throw checkoutError;
-
-      // Redirect to Stripe checkout
-      if (checkoutData?.url) {
-        window.location.href = checkoutData.url;
-      } else {
-        throw new Error("URL de checkout não encontrada");
-      }
+      // Redirect to Stripe payment link
+      const paymentUrl = `https://buy.stripe.com/aFa6oIfC9du3fs008Z83C02?client_reference_id=${authData.user.id}&prefilled_email=${encodeURIComponent(formData.email)}`;
+      window.location.href = paymentUrl;
     } catch (error: any) {
       console.error("Signup error:", error);
       toast({

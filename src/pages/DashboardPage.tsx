@@ -75,22 +75,9 @@ const DashboardPage = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke(
-        "create-checkout-session",
-        {
-          body: {
-            userId: user.id,
-            email: subscription?.email,
-            priceId: "price_1SA2vELWyC4uRc8xY7TKWEzK",
-          },
-        }
-      );
-
-      if (error) throw error;
-
-      if (data?.url) {
-        window.location.href = data.url;
-      }
+      // Redirect to Stripe payment link
+      const paymentUrl = `https://buy.stripe.com/aFa6oIfC9du3fs008Z83C02?client_reference_id=${user.id}&prefilled_email=${encodeURIComponent(subscription?.email || '')}`;
+      window.location.href = paymentUrl;
     } catch (error: any) {
       console.error("Error:", error);
       toast({
