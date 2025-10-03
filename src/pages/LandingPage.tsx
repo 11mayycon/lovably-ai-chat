@@ -57,9 +57,8 @@ const LandingPage = () => {
             <span className="text-2xl font-bold text-white">ISA 2.5</span>
           </div>
           <Button 
-            variant="outline" 
             onClick={() => navigate('/support-login')}
-            className="border-white/20 text-white hover:bg-white/10"
+            className="bg-purple-600 hover:bg-purple-700 text-white font-bold"
           >
             Entrar
           </Button>
