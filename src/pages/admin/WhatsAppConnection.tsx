@@ -17,14 +17,38 @@ export default function WhatsAppConnection() {
 
   const loadConnection = async () => {
     try {
+      // Verificar status real da Evolution API
+      const { data: statusData } = await supabase.functions.invoke('evolution-get-status');
+      
       const { data, error } = await supabase
         .from("whatsapp_connections")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== "PGRST116") throw error;
+      if (error) throw error;
+
+      // Atualizar status se houver conexão no banco e status da API
+      if (data && statusData) {
+        const isConnected = statusData.state === 'open' || statusData.status === 'open';
+        
+        if (isConnected && data.status !== 'connected') {
+          const { error: updateError } = await supabase
+            .from("whatsapp_connections")
+            .update({
+              status: "connected",
+              last_connection: new Date().toISOString()
+            })
+            .eq("id", data.id);
+
+          if (!updateError) {
+            data.status = 'connected';
+            data.last_connection = new Date().toISOString();
+          }
+        }
+      }
+      
       setConnection(data);
     } catch (error) {
       console.error("Erro ao carregar conexão:", error);
@@ -37,16 +61,28 @@ export default function WhatsAppConnection() {
     try {
       setLoading(true);
       
-      // Simular geração de QR Code
-      const mockQR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
-      setQrCode(mockQR);
+      // Chamar Evolution API para obter QR Code real
+      const { data: qrData, error: qrError } = await supabase.functions.invoke('evolution-get-qr');
+
+      if (qrError) throw qrError;
+
+      console.log('QR Code data:', qrData);
+
+      // O QR Code vem em qrData.base64 ou qrData.code
+      const qrCodeImage = qrData.base64 || qrData.code || qrData.qrcode?.base64;
+      
+      if (!qrCodeImage) {
+        throw new Error('QR Code não retornado pela API');
+      }
+
+      setQrCode(qrCodeImage);
 
       if (!connection) {
         const { error } = await supabase
           .from("whatsapp_connections")
           .insert({
-            instance_name: "ISA 2.5",
-            qr_code: mockQR,
+            instance_name: "isa25",
+            qr_code: qrCodeImage,
             status: "waiting"
           });
 
@@ -55,7 +91,7 @@ export default function WhatsAppConnection() {
         const { error } = await supabase
           .from("whatsapp_connections")
           .update({
-            qr_code: mockQR,
+            qr_code: qrCodeImage,
             status: "waiting"
           })
           .eq("id", connection.id);
@@ -67,7 +103,7 @@ export default function WhatsAppConnection() {
       toast.success("QR Code gerado! Escaneie com seu WhatsApp");
     } catch (error) {
       console.error("Erro ao gerar QR Code:", error);
-      toast.error("Erro ao gerar QR Code");
+      toast.error("Erro ao gerar QR Code: " + (error as Error).message);
     } finally {
       setLoading(false);
     }
@@ -163,7 +199,11 @@ export default function WhatsAppConnection() {
             {qrCode ? (
               <div className="flex flex-col items-center gap-4">
                 <div className="p-4 bg-white rounded-lg border-2">
-                  <QrCode className="w-64 h-64 text-foreground" />
+                  <img 
+                    src={qrCode} 
+                    alt="QR Code WhatsApp" 
+                    className="w-64 h-64"
+                  />
                 </div>
                 <div className="flex items-center gap-2 text-warning">
                   <RefreshCw className="w-4 h-4 animate-spin" />
