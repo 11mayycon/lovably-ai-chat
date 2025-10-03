@@ -78,6 +78,7 @@ export type Database = {
           finished_at: string | null
           id: string
           initial_message: string | null
+          observations: string | null
           rating: number | null
           room_id: string | null
           started_at: string | null
@@ -94,6 +95,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           initial_message?: string | null
+          observations?: string | null
           rating?: number | null
           room_id?: string | null
           started_at?: string | null
@@ -110,6 +112,7 @@ export type Database = {
           finished_at?: string | null
           id?: string
           initial_message?: string | null
+          observations?: string | null
           rating?: number | null
           room_id?: string | null
           started_at?: string | null
@@ -183,6 +186,33 @@ export type Database = {
           full_name?: string | null
           id?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      quick_replies: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          title?: string
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
