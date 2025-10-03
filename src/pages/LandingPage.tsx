@@ -122,7 +122,7 @@ const LandingPage = () => {
 
                   <div className="pt-4 space-y-3">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-5xl font-bold text-white">R$ 59,90</span>
+                      <span className="text-5xl font-bold text-white inline-block animate-spin-360">R$ 59,90</span>
                       <span className="text-xl text-slate-400">/mês</span>
                     </div>
                     <p className="text-sm text-slate-400">
@@ -134,7 +134,7 @@ const LandingPage = () => {
                 <div className="space-y-4">
                   <Button 
                     size="lg" 
-                    className="w-full text-lg h-16 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold shadow-lg shadow-blue-500/50 hover:shadow-xl hover:shadow-blue-500/60 transition-all duration-300 hover:scale-105"
+                    className="w-full text-lg h-16 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold shadow-lg shadow-blue-500/50 hover:shadow-xl hover:shadow-blue-500/60 transition-all duration-300 hover:scale-105 animate-float"
                     onClick={() => navigate('/cadastro')}
                   >
                     <Zap className="w-5 h-5 mr-2" />
