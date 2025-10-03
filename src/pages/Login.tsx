@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
   const { signIn } = useAuth();
+  const [userType, setUserType] = useState<"admin" | "support">("admin");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -116,6 +117,57 @@ const Login = () => {
             </p>
           </div>
 
+          {/* User Type Toggle */}
+          <div className="flex gap-4">
+            <button
+              type="button"
+              onClick={() => setUserType("admin")}
+              className={`flex-1 p-6 rounded-xl border-2 transition-all ${
+                userType === "admin"
+                  ? "border-primary bg-primary/5 shadow-lg scale-105"
+                  : "border-border hover:border-primary/50"
+              }`}
+            >
+              <div className="flex flex-col items-center gap-3">
+                <div
+                  className={`p-4 rounded-full ${
+                    userType === "admin" ? "bg-primary text-primary-foreground" : "bg-muted"
+                  }`}
+                >
+                  <Shield className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="font-bold text-lg">ADMINISTRADOR</p>
+                  <p className="text-xs text-muted-foreground">Acesso total ao sistema</p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setUserType("support")}
+              className={`flex-1 p-6 rounded-xl border-2 transition-all ${
+                userType === "support"
+                  ? "border-secondary bg-secondary/5 shadow-lg scale-105"
+                  : "border-border hover:border-secondary/50"
+              }`}
+            >
+              <div className="flex flex-col items-center gap-3">
+                <div
+                  className={`p-4 rounded-full ${
+                    userType === "support" ? "bg-secondary text-secondary-foreground" : "bg-muted"
+                  }`}
+                >
+                  <Headphones className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="font-bold text-lg">SUPORTE</p>
+                  <p className="text-xs text-muted-foreground">Atendimento ao cliente</p>
+                </div>
+              </div>
+            </button>
+          </div>
+
           {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-4">
@@ -180,9 +232,13 @@ const Login = () => {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full h-12 text-lg font-semibold bg-gradient-primary hover:opacity-90 transition-opacity"
+              className={`w-full h-12 text-lg font-semibold transition-opacity ${
+                userType === "admin"
+                  ? "bg-gradient-primary hover:opacity-90"
+                  : "bg-gradient-secondary hover:opacity-90"
+              }`}
             >
-              {loading ? "ENTRANDO..." : "ENTRAR"}
+              {loading ? "ENTRANDO..." : `ENTRAR COMO ${userType === "admin" ? "ADMINISTRADOR" : "SUPORTE"}`}
             </Button>
           </form>
 
