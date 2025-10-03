@@ -195,6 +195,16 @@ const AdminLogin = () => {
           <p className="text-center text-sm text-muted-foreground">
             Apenas administradores autorizados podem acessar este painel.
           </p>
+
+          <div className="mt-6 pt-6 border-t border-border">
+            <p className="text-center text-xs text-muted-foreground mb-3">
+              Login para Super Administrador
+            </p>
+            <div className="flex items-center justify-center gap-2 text-xs text-primary">
+              <Shield className="w-4 h-4" />
+              <span className="font-semibold">Acesso Total ao Sistema</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

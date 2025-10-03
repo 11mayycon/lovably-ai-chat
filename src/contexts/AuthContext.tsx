@@ -30,15 +30,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Fetch user role
+          // Fetch user roles
           setTimeout(async () => {
-            const { data: roleData } = await supabase
+            const { data: rolesData } = await supabase
               .from("user_roles")
               .select("role")
-              .eq("user_id", session.user.id)
-              .single();
+              .eq("user_id", session.user.id);
             
-            setUserRole(roleData?.role ?? null);
+            if (rolesData && rolesData.length > 0) {
+              const roles = rolesData.map(r => r.role);
+              const role = roles.includes("super_admin") 
+                ? "super_admin" 
+                : roles.includes("admin")
+                ? "admin"
+                : roles.includes("support")
+                ? "support"
+                : null;
+              setUserRole(role);
+            } else {
+              setUserRole(null);
+            }
           }, 0);
         } else {
           setUserRole(null);
@@ -56,9 +67,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           .from("user_roles")
           .select("role")
           .eq("user_id", session.user.id)
-          .single()
-          .then(({ data: roleData }) => {
-            setUserRole(roleData?.role ?? null);
+          .then(({ data: rolesData }) => {
+            if (rolesData && rolesData.length > 0) {
+              const roles = rolesData.map(r => r.role);
+              const role = roles.includes("super_admin") 
+                ? "super_admin" 
+                : roles.includes("admin")
+                ? "admin"
+                : roles.includes("support")
+                ? "support"
+                : null;
+              setUserRole(role);
+            } else {
+              setUserRole(null);
+            }
             setLoading(false);
           });
       } else {
@@ -79,14 +101,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       throw error;
     }
 
-    // Fetch user role
-    const { data: roleData } = await supabase
+    // Fetch all user roles (user may have multiple roles)
+    const { data: rolesData } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", data.user.id)
-      .single();
+      .eq("user_id", data.user.id);
 
-    const role = roleData?.role;
+    if (!rolesData || rolesData.length === 0) {
+      toast.error("Usuário sem permissões atribuídas");
+      await supabase.auth.signOut();
+      return;
+    }
+
+    // Prioritize super_admin, then admin, then support
+    const roles = rolesData.map(r => r.role);
+    const role = roles.includes("super_admin") 
+      ? "super_admin" 
+      : roles.includes("admin")
+      ? "admin"
+      : roles.includes("support")
+      ? "support"
+      : null;
+
+    if (!role) {
+      toast.error("Usuário sem permissões válidas");
+      await supabase.auth.signOut();
+      return;
+    }
+
     setUserRole(role);
 
     // Navigate based on role
@@ -94,9 +136,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       navigate("/admin/dashboard");
     } else if (role === "support") {
       navigate("/support/select-room");
-    } else {
-      toast.error("Usuário sem permissões atribuídas");
-      await supabase.auth.signOut();
     }
   };
 
