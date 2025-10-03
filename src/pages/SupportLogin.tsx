@@ -22,32 +22,23 @@ const SupportLogin = () => {
 
     setLoading(true);
     try {
-      // Buscar usuário de suporte pela matrícula
-      const { data: supportUser, error: userError } = await supabase
-        .from("support_users")
-        .select("*")
-        .eq("matricula", matricula.toUpperCase())
-        .eq("is_active", true)
-        .single();
+      // Usar função pública para validar matrícula e buscar salas (bypass RLS)
+      const { data, error } = await supabase.functions.invoke("support-login", {
+        body: { matricula: matricula.trim().toUpperCase() },
+      });
 
-      if (userError || !supportUser) {
-        toast.error("Matrícula não encontrada ou usuário inativo");
-        setLoading(false);
+      if (error) throw error;
+
+      if (!data?.success) {
+        toast.error(data?.error || "Não foi possível validar sua matrícula");
         return;
       }
 
-      // Buscar salas vinculadas a este usuário
-      const { data: rooms, error: roomsError } = await supabase
-        .from("support_rooms")
-        .select("*")
-        .eq("support_user_id", supportUser.id)
-        .order("created_at", { ascending: false });
-
-      if (roomsError) throw roomsError;
+      const supportUser = data.supportUser;
+      const rooms = data.rooms as any[];
 
       if (!rooms || rooms.length === 0) {
         toast.error("Nenhuma sala vinculada à sua matrícula");
-        setLoading(false);
         return;
       }
 
