@@ -14,6 +14,154 @@ export type Database = {
   }
   public: {
     Tables: {
+      activities: {
+        Row: {
+          created_at: string | null
+          description: string
+          id: string
+          metadata: Json | null
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          id?: string
+          metadata?: Json | null
+          type: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          id?: string
+          metadata?: Json | null
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      ai_memory: {
+        Row: {
+          context: Json | null
+          created_at: string | null
+          id: string
+          instructions: string
+          quick_replies: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          context?: Json | null
+          created_at?: string | null
+          id?: string
+          instructions: string
+          quick_replies?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          context?: Json | null
+          created_at?: string | null
+          id?: string
+          instructions?: string
+          quick_replies?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      attendances: {
+        Row: {
+          agent_id: string | null
+          assigned_to: string | null
+          client_name: string
+          client_phone: string
+          created_at: string | null
+          finished_at: string | null
+          id: string
+          initial_message: string | null
+          rating: number | null
+          room_id: string | null
+          started_at: string | null
+          status: string
+          tags: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          assigned_to?: string | null
+          client_name: string
+          client_phone: string
+          created_at?: string | null
+          finished_at?: string | null
+          id?: string
+          initial_message?: string | null
+          rating?: number | null
+          room_id?: string | null
+          started_at?: string | null
+          status?: string
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          assigned_to?: string | null
+          client_name?: string
+          client_phone?: string
+          created_at?: string | null
+          finished_at?: string | null
+          id?: string
+          initial_message?: string | null
+          rating?: number | null
+          room_id?: string | null
+          started_at?: string | null
+          status?: string
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendances_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "support_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          attendance_id: string
+          content: string
+          created_at: string | null
+          id: string
+          sender_id: string | null
+          sender_type: string
+        }
+        Insert: {
+          attendance_id: string
+          content: string
+          created_at?: string | null
+          id?: string
+          sender_id?: string | null
+          sender_type: string
+        }
+        Update: {
+          attendance_id?: string
+          content?: string
+          created_at?: string | null
+          id?: string
+          sender_id?: string | null
+          sender_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_attendance_id_fkey"
+            columns: ["attendance_id"]
+            isOneToOne: false
+            referencedRelation: "attendances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -38,6 +186,95 @@ export type Database = {
         }
         Relationships: []
       }
+      room_members: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_online: boolean | null
+          last_seen: string | null
+          room_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_online?: boolean | null
+          last_seen?: string | null
+          room_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_online?: boolean | null
+          last_seen?: string | null
+          room_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "room_members_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "support_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          key: string
+          updated_at: string | null
+          value: Json
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          value: Json
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
+      support_rooms: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          max_members: number | null
+          name: string
+          password: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          max_members?: number | null
+          name: string
+          password: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          max_members?: number | null
+          name?: string
+          password?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -56,6 +293,39 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_connections: {
+        Row: {
+          created_at: string | null
+          id: string
+          instance_name: string
+          last_connection: string | null
+          phone_number: string | null
+          qr_code: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          instance_name: string
+          last_connection?: string | null
+          phone_number?: string | null
+          qr_code?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          instance_name?: string
+          last_connection?: string | null
+          phone_number?: string | null
+          qr_code?: string | null
+          status?: string
+          updated_at?: string | null
         }
         Relationships: []
       }

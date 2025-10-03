@@ -4,9 +4,15 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider } from "next-themes";
 import Login from "./pages/Login";
 import Setup from "./pages/Setup";
 import Dashboard from "./pages/admin/Dashboard";
+import WhatsAppConnection from "./pages/admin/WhatsAppConnection";
+import AIMemory from "./pages/admin/AIMemory";
+import ManageSupport from "./pages/admin/ManageSupport";
+import Reports from "./pages/admin/Reports";
+import Settings from "./pages/admin/Settings";
 import SelectRoom from "./pages/support/SelectRoom";
 import Chat from "./pages/support/Chat";
 import NotFound from "./pages/NotFound";
@@ -15,16 +21,22 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
+    <ThemeProvider attribute="class" defaultTheme="dark">
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
           <Routes>
             <Route path="/" element={<Navigate to="/setup" replace />} />
             <Route path="/setup" element={<Setup />} />
             <Route path="/login" element={<Login />} />
             <Route path="/admin/dashboard" element={<Dashboard />} />
+            <Route path="/admin/whatsapp" element={<WhatsAppConnection />} />
+            <Route path="/admin/ai-memory" element={<AIMemory />} />
+            <Route path="/admin/support" element={<ManageSupport />} />
+            <Route path="/admin/reports" element={<Reports />} />
+            <Route path="/admin/settings" element={<Settings />} />
             <Route path="/support/select-room" element={<SelectRoom />} />
             <Route path="/support/chat" element={<Chat />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
@@ -33,6 +45,7 @@ const App = () => (
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
