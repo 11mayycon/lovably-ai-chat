@@ -1,37 +1,43 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Bot, Headphones, Eye, EyeOff, Shield } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Login = () => {
-  const navigate = useNavigate();
-  const [userType, setUserType] = useState<"admin" | "support">("admin");
+  const { signIn } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     rememberMe: false,
   });
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validação simples
     if (!formData.email || !formData.password) {
       toast.error("Preencha todos os campos");
       return;
     }
 
-    toast.success(`Login realizado como ${userType === "admin" ? "Administrador" : "Suporte"}!`);
-    
-    if (userType === "admin") {
-      navigate("/admin/dashboard");
-    } else {
-      navigate("/support/select-room");
+    setLoading(true);
+    try {
+      await signIn(formData.email, formData.password);
+      toast.success("Login realizado com sucesso!");
+    } catch (error: any) {
+      console.error("Login error:", error);
+      if (error.message?.includes("Invalid login credentials")) {
+        toast.error("Email ou senha incorretos");
+      } else {
+        toast.error("Erro ao fazer login. Tente novamente.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -110,41 +116,6 @@ const Login = () => {
             </p>
           </div>
 
-          {/* User Type Toggle */}
-          <div className="flex gap-4">
-            <button
-              onClick={() => setUserType("admin")}
-              className={`flex-1 p-4 rounded-xl border-2 transition-all ${
-                userType === "admin"
-                  ? "border-primary bg-primary/5 shadow-glow"
-                  : "border-border hover:border-primary/50"
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Shield className={`w-5 h-5 ${userType === "admin" ? "text-primary" : "text-muted-foreground"}`} />
-                <span className={`font-semibold ${userType === "admin" ? "text-primary" : "text-foreground"}`}>
-                  ADMINISTRADOR
-                </span>
-              </div>
-            </button>
-            
-            <button
-              onClick={() => setUserType("support")}
-              className={`flex-1 p-4 rounded-xl border-2 transition-all ${
-                userType === "support"
-                  ? "border-secondary bg-secondary/5 shadow-glow"
-                  : "border-border hover:border-secondary/50"
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Headphones className={`w-5 h-5 ${userType === "support" ? "text-secondary" : "text-muted-foreground"}`} />
-                <span className={`font-semibold ${userType === "support" ? "text-secondary" : "text-foreground"}`}>
-                  SUPORTE
-                </span>
-              </div>
-            </button>
-          </div>
-
           {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-4">
@@ -208,11 +179,10 @@ const Login = () => {
 
             <Button
               type="submit"
-              className={`w-full h-12 text-lg font-semibold ${
-                userType === "admin" ? "bg-gradient-primary" : "bg-gradient-secondary"
-              } hover:opacity-90 transition-opacity`}
+              disabled={loading}
+              className="w-full h-12 text-lg font-semibold bg-gradient-primary hover:opacity-90 transition-opacity"
             >
-              ENTRAR
+              {loading ? "ENTRANDO..." : "ENTRAR"}
             </Button>
           </form>
 
