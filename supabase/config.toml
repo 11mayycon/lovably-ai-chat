@@ -1,1 +1,13 @@
 project_id = "grlyhylqbekhrmfwgyme"
+
+[functions.evolution-get-qr]
+verify_jwt = false
+
+[functions.evolution-get-status]
+verify_jwt = false
+
+[functions.evolution-send-message]
+verify_jwt = false
+
+[functions.evolution-create-session]
+verify_jwt = false
