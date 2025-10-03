@@ -162,6 +162,22 @@ export default function WhatsAppConnection() {
 
   const isConnected = connection?.status === "connected";
 
+  // Limpar o QR assim que conectar
+  useEffect(() => {
+    if (isConnected) {
+      setQrCode(null);
+    }
+  }, [isConnected]);
+
+  // Polling para atualizar status pós-leitura do QR
+  useEffect(() => {
+    if (isConnected) return;
+    const interval = setInterval(() => {
+      loadConnection();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isConnected]);
+
   return (
     <div className="space-y-6">
       <div>
