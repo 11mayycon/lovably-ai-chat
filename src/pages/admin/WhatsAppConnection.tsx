@@ -17,8 +17,10 @@ export default function WhatsAppConnection() {
 
   const loadConnection = async () => {
     try {
-      // Verificar status real da Evolution API
-      const { data: statusData } = await supabase.functions.invoke('evolution-get-status');
+      // Verificar status real da Evolution API usando função unificada
+      const { data: statusResponse } = await supabase.functions.invoke('evolution', {
+        body: { action: 'checkStatus' }
+      });
       
       const { data, error } = await supabase
         .from("whatsapp_connections")
@@ -30,8 +32,12 @@ export default function WhatsAppConnection() {
       if (error) throw error;
 
       // Atualizar status se houver conexão no banco e status da API
-      if (data && statusData) {
-        const isConnected = statusData.state === 'open' || statusData.status === 'open';
+      if (data && statusResponse?.success) {
+        const instances = statusResponse.result;
+        const instance = instances?.[0];
+        const isConnected = instance?.instance?.state === 'open' || 
+                          instance?.state === 'open' ||
+                          instance?.status === 'open';
         
         if (isConnected && data.status !== 'connected') {
           const { error: updateError } = await supabase
@@ -61,15 +67,24 @@ export default function WhatsAppConnection() {
     try {
       setLoading(true);
       
-      // Chamar Evolution API para obter QR Code real
-      const { data: qrData, error: qrError } = await supabase.functions.invoke('evolution-get-qr');
+      // Chamar Evolution API unificada para obter QR Code
+      const { data: qrData, error: qrError } = await supabase.functions.invoke('evolution', {
+        body: { action: 'getQR' }
+      });
 
       if (qrError) throw qrError;
 
       console.log('QR Code data:', qrData);
 
-      // O QR Code vem em qrData.base64 ou qrData.code
-      const qrCodeImage = qrData.base64 || qrData.code || qrData.qrcode?.base64;
+      if (!qrData.success) {
+        throw new Error(qrData.error || 'Erro ao obter QR Code');
+      }
+
+      // O QR Code vem em result
+      const instances = qrData.result;
+      const qrCodeImage = instances[0]?.instance?.qrcode?.base64 || 
+                         instances[0]?.qrcode?.base64 ||
+                         instances[0]?.instance?.qr;
       
       if (!qrCodeImage) {
         throw new Error('QR Code não retornado pela API');
