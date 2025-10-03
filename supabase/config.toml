@@ -1,7 +1,1 @@
 project_id = "grlyhylqbekhrmfwgyme"
-
-[functions.ai-suggest-response]
-verify_jwt = false
-
-[functions.ai-whatsapp-response]
-verify_jwt = false

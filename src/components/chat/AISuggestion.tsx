@@ -20,19 +20,18 @@ export const AISuggestion = ({ messages, attendanceId, onUseSuggestion }: AISugg
 
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('ai-suggest-response', {
-        body: {
-          messages: messages.slice(-10), // Last 10 messages for context
-          context: `Atendimento ID: ${attendanceId}`
-        }
-      });
-
-      if (error) throw error;
-      setSuggestion(data.suggestion);
+      // Simulated AI suggestion for now
+      // In production, this would call the Groq API via edge function
+      const lastMessage = messages[messages.length - 1];
+      
+      setTimeout(() => {
+        setSuggestion(`Olá! Entendo que você precisa de ajuda com "${lastMessage.content.substring(0, 50)}...". Posso ajudar você com isso. Como posso auxiliar melhor?`);
+        setIsLoading(false);
+      }, 1000);
+      
     } catch (error) {
       console.error('Error generating suggestion:', error);
       toast.error('Erro ao gerar sugestão da IA');
-    } finally {
       setIsLoading(false);
     }
   };
