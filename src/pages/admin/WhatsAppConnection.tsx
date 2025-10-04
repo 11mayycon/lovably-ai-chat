@@ -49,13 +49,15 @@ export default function WhatsAppConnection() {
             .from("whatsapp_connections")
             .update({
               status: "connected",
-              last_connection: new Date().toISOString()
+              last_connection: new Date().toISOString(),
+              qr_code: null
             })
             .eq("id", data.id);
 
           if (!updateError) {
             data.status = 'connected';
             data.last_connection = new Date().toISOString();
+            data.qr_code = null;
           }
         }
       }
