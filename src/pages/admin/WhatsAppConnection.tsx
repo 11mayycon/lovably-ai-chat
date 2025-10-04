@@ -73,8 +73,19 @@ export default function WhatsAppConnection() {
   const generateQRCode = async () => {
     try {
       setLoading(true);
+      setQrCode(null);
+
+      // 1) Sempre tentar criar/garantir a instância antes de buscar o QR
+      //    Se já existir, ignoramos o erro e seguimos para o QR
+      try {
+        await supabase.functions.invoke('evolution', {
+          body: { action: 'createInstance' }
+        });
+      } catch (createErr) {
+        console.warn('Create instance error (ignored):', createErr);
+      }
       
-      // Chamar Evolution API unificada para obter QR Code
+      // 2) Buscar o QR Code na Evolution API
       const { data: qrData, error: qrError } = await supabase.functions.invoke('evolution', {
         body: { action: 'getQR' }
       });
@@ -83,8 +94,8 @@ export default function WhatsAppConnection() {
 
       console.log('QR Code data:', qrData);
 
-      if (!qrData.success) {
-        throw new Error(qrData.error || 'Erro ao obter QR Code');
+      if (!qrData?.success) {
+        throw new Error(qrData?.error || 'Erro ao obter QR Code');
       }
 
       // O QR Code vem em result
@@ -143,7 +154,8 @@ export default function WhatsAppConnection() {
       toast.success("QR Code gerado! Escaneie com seu WhatsApp");
     } catch (error) {
       console.error("Erro ao gerar QR Code:", error);
-      toast.error("Erro ao gerar QR Code: " + (error as Error).message);
+      const message = (error as any)?.message || (error as Error).toString();
+      toast.error("Erro ao gerar QR Code: " + message);
     } finally {
       setLoading(false);
     }
