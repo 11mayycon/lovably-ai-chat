@@ -367,15 +367,7 @@ export type Database = {
           support_user_id?: string | null
           updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "support_rooms_support_user_id_fkey"
-            columns: ["support_user_id"]
-            isOneToOne: false
-            referencedRelation: "support_users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       support_users: {
         Row: {
@@ -473,7 +465,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "whatsapp_connections_support_room_id_fkey"
+            foreignKeyName: "fk_support_room"
             columns: ["support_room_id"]
             isOneToOne: false
             referencedRelation: "support_rooms"

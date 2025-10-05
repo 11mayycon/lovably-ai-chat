@@ -17,15 +17,9 @@ export default function WhatsAppConnection() {
 
   const loadConnection = async () => {
     try {
-      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
-      // Verificar status real da Evolution API usando função unificada
-      const { data: statusResponse } = await supabase.functions.invoke('evolution', {
-        body: { action: 'checkStatus' }
-      });
-      
       const { data, error } = await supabase
         .from("whatsapp_connections")
         .select("*")
@@ -36,29 +30,43 @@ export default function WhatsAppConnection() {
 
       if (error) throw error;
 
-      // Atualizar status se houver conexão no banco e status da API
-      if (data && statusResponse?.success) {
-        const instances = statusResponse.result;
-        const instance = instances?.[0];
-        const isConnected = instance?.instance?.state === 'open' || 
-                          instance?.state === 'open' ||
-                          instance?.status === 'open';
-        
-        if (isConnected && data.status !== 'connected') {
-          const { error: updateError } = await supabase
-            .from("whatsapp_connections")
-            .update({
-              status: "connected",
-              last_connection: new Date().toISOString(),
-              qr_code: null
-            })
-            .eq("id", data.id);
+      // Se há conexão, verificar status na Evolution API
+      if (data) {
+        try {
+          const { data: statusResponse } = await supabase.functions.invoke('evolution', {
+            body: { 
+              action: 'fetchInstances',
+              instanceName: data.instance_name
+            }
+          });
+          
+          if (statusResponse?.success) {
+            const instances = statusResponse.result;
+            const instance = instances?.[0];
+            const isConnected = instance?.instance?.state === 'open' || 
+                              instance?.state === 'open' ||
+                              instance?.status === 'open';
+            
+            // Atualizar status no banco se mudou
+            if (isConnected && data.status !== 'connected') {
+              const { error: updateError } = await supabase
+                .from("whatsapp_connections")
+                .update({
+                  status: "connected",
+                  last_connection: new Date().toISOString(),
+                  qr_code: null
+                })
+                .eq("id", data.id);
 
-          if (!updateError) {
-            data.status = 'connected';
-            data.last_connection = new Date().toISOString();
-            data.qr_code = null;
+              if (!updateError) {
+                data.status = 'connected';
+                data.last_connection = new Date().toISOString();
+                data.qr_code = null;
+              }
+            }
           }
+        } catch (statusError) {
+          console.warn("Erro ao verificar status:", statusError);
         }
       }
       
@@ -75,30 +83,48 @@ export default function WhatsAppConnection() {
       setLoading(true);
       setQrCode(null);
 
-      // 1) Sempre tentar criar/garantir a instância antes de buscar o QR
-      //    Se já existir, ignoramos o erro e seguimos para o QR
-      try {
-        await supabase.functions.invoke('evolution', {
-          body: { action: 'createInstance' }
-        });
-      } catch (createErr) {
-        console.warn('Create instance error (ignored):', createErr);
-      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      // Gerar nome único para a instância
+      const instanceName = `isa_user_${user.id.substring(0, 8)}_${Date.now().toString(36)}`;
       
-      // 2) Buscar o QR Code na Evolution API
+      console.log('[WhatsApp] Criando instância:', instanceName);
+
+      // 1) Criar a instância na Evolution API
+      const { data: createData, error: createError } = await supabase.functions.invoke('evolution', {
+        body: { 
+          action: 'createInstance',
+          instanceName,
+          userId: user.id
+        }
+      });
+
+      if (createError) throw createError;
+
+      if (!createData?.success && !createData?.result?.alreadyExists) {
+        throw new Error(createData?.error || 'Erro ao criar instância');
+      }
+
+      console.log('[WhatsApp] Instância criada:', createData);
+
+      // 2) Buscar o QR Code
       const { data: qrData, error: qrError } = await supabase.functions.invoke('evolution', {
-        body: { action: 'getQR' }
+        body: { 
+          action: 'getQR',
+          instanceName
+        }
       });
 
       if (qrError) throw qrError;
 
-      console.log('QR Code data:', qrData);
+      console.log('[WhatsApp] QR Code recebido:', qrData);
 
       if (!qrData?.success) {
         throw new Error(qrData?.error || 'Erro ao obter QR Code');
       }
 
-      // O QR Code vem em result
+      // Extrair QR Code da resposta
       const instances = qrData.result;
       let qrCodeImage: string | undefined =
         instances?.[0]?.instance?.qrcode?.base64 ||
@@ -113,24 +139,22 @@ export default function WhatsAppConnection() {
         throw new Error('QR Code não retornado pela API');
       }
 
-      // Garantir prefixo data URL para renderização
-      if (qrCodeImage && !qrCodeImage.startsWith('data:image')) {
+      // Garantir prefixo data URL
+      if (!qrCodeImage.startsWith('data:image')) {
         qrCodeImage = `data:image/png;base64,${qrCodeImage}`;
       }
 
       setQrCode(qrCodeImage);
 
-      // Get current user and generate matricula
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuário não autenticado");
-
+      // Gerar matrícula única
       const matricula = `WA-${Date.now().toString(36).toUpperCase()}`;
 
+      // 3) Salvar no banco de dados
       if (!connection) {
         const { error } = await supabase
           .from("whatsapp_connections")
           .insert({
-            instance_name: "isa25",
+            instance_name: instanceName,
             qr_code: qrCodeImage,
             status: "waiting",
             admin_user_id: user.id,
@@ -142,6 +166,7 @@ export default function WhatsAppConnection() {
         const { error } = await supabase
           .from("whatsapp_connections")
           .update({
+            instance_name: instanceName,
             qr_code: qrCodeImage,
             status: "waiting"
           })
@@ -153,7 +178,7 @@ export default function WhatsAppConnection() {
       await loadConnection();
       toast.success("QR Code gerado! Escaneie com seu WhatsApp");
     } catch (error) {
-      console.error("Erro ao gerar QR Code:", error);
+      console.error("[WhatsApp] Erro ao gerar QR Code:", error);
       const message = (error as any)?.message || (error as Error).toString();
       toast.error("Erro ao gerar QR Code: " + message);
     } finally {
@@ -166,6 +191,22 @@ export default function WhatsAppConnection() {
 
     try {
       setLoading(true);
+
+      // 1) Deletar instância na Evolution API
+      try {
+        const { data: deleteData } = await supabase.functions.invoke('evolution', {
+          body: { 
+            action: 'deleteInstance',
+            instanceName: connection.instance_name
+          }
+        });
+
+        console.log('[WhatsApp] Instância deletada:', deleteData);
+      } catch (deleteError) {
+        console.warn('[WhatsApp] Erro ao deletar instância (continuando):', deleteError);
+      }
+
+      // 2) Atualizar banco de dados
       const { error } = await supabase
         .from("whatsapp_connections")
         .update({
@@ -178,9 +219,9 @@ export default function WhatsAppConnection() {
       
       setQrCode(null);
       await loadConnection();
-      toast.success("WhatsApp desconectado");
+      toast.success("WhatsApp desconectado e instância removida");
     } catch (error) {
-      console.error("Erro ao desconectar:", error);
+      console.error("[WhatsApp] Erro ao desconectar:", error);
       toast.error("Erro ao desconectar WhatsApp");
     } finally {
       setLoading(false);
