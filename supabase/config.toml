@@ -17,3 +17,9 @@ verify_jwt = true
 
 [functions.create-admin]
 verify_jwt = true
+
+[functions.delete-admin]
+verify_jwt = true
+
+[functions.ai-chat]
+verify_jwt = true

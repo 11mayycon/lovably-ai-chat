@@ -37,45 +37,48 @@ export default function ManageSupport() {
   });
 
   useEffect(() => {
-    loadData();
+    loadAdminData();
+
+    const channel = supabase
+      .channel('room-members-changes-admin')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'room_members' },
+        (payload) => {
+          console.log('Mudança em tempo real detectada (Admin):', payload);
+          loadAdminData(); // Recarrega os dados do admin
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const loadData = async () => {
+  // Função dedicada para carregar todos os dados da visão de admin
+  const loadAdminData = async () => {
+    if (loading) setLoading(true);
     try {
-      // Carregar salas com informações do usuário de suporte
-      const { data: roomsData, error: roomsError } = await supabase
-        .from("support_rooms")
-        .select(`
-          *,
-          support_users (
-            id,
-            full_name,
-            email,
-            matricula,
-            phone
-          ),
-          room_members (
-            user_id,
-            is_online
-          )
-        `)
-        .order("created_at", { ascending: false });
+      // Busca as salas usando a nova Edge Function segura
+      const { data: roomsData, error: roomsError } = await supabase.functions.invoke("get-all-support-rooms");
+      if (roomsError) throw new Error(roomsError.message);
+      if (roomsData.error) throw new Error(roomsData.error);
 
-      if (roomsError) throw roomsError;
-      setRooms(roomsData || []);
+      setRooms(roomsData.rooms || []);
 
-      // Carregar usuários de suporte ativos
+      // Continua buscando os usuários de suporte para preencher o dropdown do formulário
       const { data: usersData, error: usersError } = await supabase
         .from("support_users")
         .select("*")
-        .eq("is_active", true)
         .order("full_name");
-
       if (usersError) throw usersError;
-      setSupportUsers(usersData || []);
-    } catch (error) {
-      console.error("Erro ao carregar dados:", error);
-      toast.error("Erro ao carregar dados");
+      
+      setSupportUsers(usersData.filter(u => u.is_active) || []);
+
+    } catch (error: any) {
+      console.error("Erro ao carregar dados do admin:", error);
+      toast.error("Erro ao carregar os dados", { description: error.message });
     } finally {
       setLoading(false);
     }
@@ -86,57 +89,39 @@ export default function ManageSupport() {
       toast.error("Nome e usuário são obrigatórios");
       return;
     }
-
     try {
-      // Get current admin user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuário não autenticado");
+      const { data, error } = await supabase.functions.invoke("create-support-room", {
+        body: newRoom,
+      });
 
-      // Verificar se o usuário já tem uma sala
-      const existingRoom = rooms.find(r => r.support_user_id === newRoom.support_user_id);
-      if (existingRoom) {
-        toast.error("Este usuário já possui uma sala atribuída");
-        return;
-      }
+      if (error) throw new Error(error.message);
+      if (data.error) throw new Error(data.error);
 
-      const { error } = await supabase
-        .from("support_rooms")
-        .insert({
-          name: newRoom.name,
-          support_user_id: newRoom.support_user_id,
-          description: newRoom.description,
-          max_members: newRoom.max_members,
-          admin_owner_id: user.id
-        });
-
-      if (error) throw error;
-
+      // A atualização em tempo real vai recarregar a lista!
       toast.success("Sala criada com sucesso!");
       setIsCreateOpen(false);
       setNewRoom({ name: "", support_user_id: "", description: "", max_members: 10 });
-      loadData();
-    } catch (error) {
+      loadAdminData(); // Força a recarga para garantir consistência
+
+    } catch (error: any) {
       console.error("Erro ao criar sala:", error);
-      toast.error("Erro ao criar sala");
+      toast.error("Erro ao criar sala", { description: error.message });
     }
   };
 
   const deleteRoom = async (id: string) => {
     if (!confirm("Tem certeza que deseja excluir esta sala?")) return;
-
     try {
-      const { error } = await supabase
-        .from("support_rooms")
-        .delete()
-        .eq("id", id);
-
+      const { error } = await supabase.from("support_rooms").delete().eq("id", id);
       if (error) throw error;
-
+      
       toast.success("Sala excluída com sucesso!");
-      loadData();
-    } catch (error) {
+      // A UI será atualizada automaticamente pelo `subscribe` em tempo real.
+      loadAdminData(); // Força a recarga para garantir consistência
+
+    } catch (error: any) {
       console.error("Erro ao excluir sala:", error);
-      toast.error("Erro ao excluir sala");
+      toast.error("Erro ao excluir sala", { description: error.message });
     }
   };
 
@@ -312,7 +297,6 @@ export default function ManageSupport() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Informações do usuário vinculado */}
                   {supportUser && (
                     <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
                       <div className="flex items-start gap-3">

@@ -1,73 +1,107 @@
-# Welcome to your Lovable project
+# Projeto ISA 2.5 - Plataforma SaaS de Automação
 
-## Project info
+Bem-vindo ao repositório do projeto **ISA 2.5**, uma plataforma SaaS robusta construída para automação, com um foco inicial na integração e gerenciamento de conexões do WhatsApp através da Evolution API.
 
-**URL**: https://lovable.dev/projects/ea46bc5c-a90b-4eaf-9907-0424d8cb9d49
+##  arquitetura e tecnologias
 
-## How can I edit this code?
+Este projeto utiliza uma arquitetura moderna e desacoplada, combinando um frontend reativo com um backend serverless para escalabilidade e eficiência.
 
-There are several ways of editing your application.
+### **Frontend**
+- **Framework:** React com Vite
+- **Linguagem:** TypeScript
+- **UI:** shadcn/ui e Tailwind CSS
+- **Cliente Supabase:** `supabase-js` para interação com o backend.
 
-**Use Lovable**
+### **Backend (Serverless)**
+- **Plataforma:** Supabase Edge Functions
+- **Runtime:** Deno (compatível com TypeScript)
+- **Funcionalidade Principal:** A função `evolution` atua como um micro-serviço, gerenciando o ciclo de vida das conexões com a Evolution API.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/ea46bc5c-a90b-4eaf-9907-0424d8cb9d49) and start prompting.
+### **API Externa**
+- **Evolution API:** Uma API auto-hospedada (`https://evo.inovapro.cloud`) que gerencia as instâncias do WhatsApp.
 
-Changes made via Lovable will be committed automatically to this repo.
+## Funcionalidades Implementadas
 
-**Use your preferred IDE**
+### **Conexão com WhatsApp (`WhatsAppConnection.tsx`)**
+- **Criação de Instância:** Gera um QR Code para que o usuário possa conectar seu número de WhatsApp.
+- **Verificação de Status em Tempo Real:** Monitora o status da conexão a cada 3 segundos, atualizando a interface em tempo real.
+- **Gerenciamento de Estado:** Exibe o status atual da conexão com badges e ícones informativos.
+- **Desconexão:** Permite que o usuário encerre a conexão da instância ativa.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### **Backend - Supabase Function `evolution`**
+A função `evolution/index.ts` expõe os seguintes endpoints baseados em ações:
+- `{ "action": "createInstance" }`: Cria uma nova instância na Evolution API.
+- `{ "action": "checkStatus", "instanceName": "..." }`: Verifica o status de uma instância.
+- `{ "action": "deleteInstance", "instanceName": "..." }`: Remove uma instância.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Configuração do Ambiente
 
-Follow these steps:
+### **Pré-requisitos**
+- Node.js e npm
+- Supabase CLI
+
+### **Passos para Instalação**
+1.  **Clonar o Repositório:** `git clone <URL_DO_SEU_REPOSITORIO_GIT>`
+2.  **Instalar Dependências:** `npm install`
+3.  **Configurar Frontend (`.env.local`):
+    ```env
+    VITE_SUPABASE_URL=https://tcswbkvsatskhaskwnit.supabase.co
+    VITE_SUPABASE_ANON_KEY=<SUA_ANON_KEY>
+    ```
+4.  **Configurar Backend (Supabase Secrets):**
+    ```sh
+    npx supabase secrets set EVOLUTION_API_URL="https://evo.inovapro.cloud"
+    npx supabase secrets set EVOLUTION_API_KEY="SUA_CHAVE_API"
+    ```
+
+### **Rodando o Projeto**
+- **Frontend:** `npm run dev`
+- **Backend (local):** `npx supabase functions serve`
+
+## Deploy
+- **Frontend:** Vercel, Netlify, Firebase Hosting, etc.
+- **Backend:** `npx supabase functions deploy evolution --no-verify-jwt`
+
+## Diagnóstico e Solução de Problemas
+
+Esta seção contém guias para diagnosticar erros comuns que podem ocorrer.
+
+### **Erro 400: Bad Request ao Criar Instância**
+
+Um erro `400 Bad Request` da Evolution API significa que os dados enviados no corpo da requisição estão incompletos ou são inválidos. Siga estes passos para diagnosticar:
+
+**1. Conferir os Dados Enviados**
+
+Verifique o objeto `requestBody` dentro da função `handleCreateInstance` em `supabase/functions/evolution/index.ts`. Garanta que todos os campos obrigatórios pela Evolution API estão presentes. Consulte a documentação da API para a lista de parâmetros.
+
+**2. Teste Direto via cURL**
+
+Execute uma chamada direta para a API para isolar o problema. Se esta chamada falhar, o problema está nos dados enviados ou na sua API. Se funcionar, o problema está na sua função Supabase.
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+cURL -X POST https://evo.inovapro.cloud/instance/create \
+-H "apikey: SUA_CHAVE_API" \
+-H "Content-Type: application/json" \
+-d '{
+  "instanceName": "teste_curl_123",
+  "token": "token_curl_123",
+  "qrcode": true,
+  "number": ""
+}'
 ```
 
-**Edit a file directly in GitHub**
+**3. Log Detalhado na Função Supabase**
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Adicione um log temporário na sua função `handleCreateInstance` para ver exatamente o que está sendo enviado:
 
-**Use GitHub Codespaces**
+```javascript
+// Dentro de handleCreateInstance, antes do fetch
+console.log("Enviando para a Evolution API:", JSON.stringify(requestBody));
+```
+Isso permitirá comparar o corpo da requisição com o que a API espera.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/ea46bc5c-a90b-4eaf-9907-0424d8cb9d49) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+**4. Possíveis Causas Comuns**
+- **Campo Obrigatório Faltando:** O corpo da requisição não contém um campo que a API exige (como `instanceName` ou `number`).
+- **Caracteres Inválidos:** O `instanceName` contém espaços, acentos ou símbolos não permitidos.
+- **Chave de API (apikey) Incorreta:** A chave no header não é válida ou não tem permissão.
+- **Endpoint Errado:** A URL da requisição está incorreta.

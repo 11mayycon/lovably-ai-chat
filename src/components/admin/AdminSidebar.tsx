@@ -23,6 +23,7 @@ const menuItems = [
   { icon: Shield, label: "Gerenciar Usuários", path: "/admin/users" },
   { icon: MessageSquare, label: "Conectar WhatsApp", path: "/admin/whatsapp" },
   { icon: Brain, label: "Memória da IA", path: "/admin/ai-memory" },
+  { icon: Brain, label: "Chat com IA", path: "/admin/ai-chat" },
   { icon: Users, label: "Usuários de Suporte", path: "/admin/support-users" },
   { icon: Users, label: "Gerenciar Salas", path: "/admin/support" },
   { icon: BarChart3, label: "Relatórios", path: "/admin/reports" },

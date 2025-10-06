@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -22,12 +23,11 @@ serve(async (req) => {
       },
     });
 
-    // Verify requester is super admin
+    // 1. Verify requester is a super admin
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       throw new Error("No authorization header");
     }
-
     const token = authHeader.replace("Bearer ", "");
     const { data: { user: requester } } = await supabaseAdmin.auth.getUser(token);
     
@@ -35,7 +35,6 @@ serve(async (req) => {
       throw new Error("Invalid token");
     }
 
-    // Check if requester is super admin (handles multiple roles)
     const { data: rolesData, error: rolesError } = await supabaseAdmin
       .from("user_roles")
       .select("role")
@@ -45,60 +44,38 @@ serve(async (req) => {
       throw rolesError;
     }
 
-    const hasSuperAdmin = Array.isArray(rolesData) && rolesData.some((r: any) => r.role === "super_admin");
-    if (!hasSuperAdmin) {
-      throw new Error("Unauthorized - Super admin access required");
+    const isSuperAdmin = Array.isArray(rolesData) && rolesData.some((r: any) => r.role === 'super_admin');
+    if (!isSuperAdmin) {
+      throw new Error("Unauthorized: Super admin access required");
     }
 
-    const { full_name, email, password, role, planName, days } = await req.json();
-
-    // Create user
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: full_name },
-    });
-
-    if (authError) throw authError;
-
-    // Add role
-    const { error: roleError } = await supabaseAdmin
-      .from("user_roles")
-      .insert({
-        user_id: authData.user.id,
-        role: role,
-      });
-
-    // Optionally create a subscription for the new admin
-    if (planName || days) {
-      const duration = Number(days) || 0;
-      const expiresAt = duration > 0 ? new Date(Date.now() + duration * 24 * 60 * 60 * 1000) : null;
-
-      const { error: subError } = await supabaseAdmin
-        .from("subscriptions")
-        .insert({
-          user_id: authData.user.id,
-          email,
-          full_name: full_name, // Adicionado o nome completo
-          status: duration > 0 ? "active" : "pending",
-          expires_at: expiresAt ? expiresAt.toISOString() : null,
-          plan_name: planName || null,
-          duration_days: duration || null,
-        });
-
-      if (subError) throw subError;
+    // 2. Get the user ID to delete from the request body
+    const { userId } = await req.json();
+    if (!userId) {
+      throw new Error("User ID to delete is required");
     }
+
+    // 3. Delete the user from the auth schema
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+
+    if (deleteError) {
+      // Handle cases like user not found, etc.
+      throw new Error(`Failed to delete user: ${deleteError.message}`);
+    }
+
+    // Note: Deletions in `subscriptions` and `user_roles` should be handled automatically 
+    // by `ON DELETE CASCADE` in the database schema.
 
     return new Response(
-      JSON.stringify({ success: true, user: authData.user }),
+      JSON.stringify({ success: true, message: "Administrator deleted successfully" }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       }
     );
+
   } catch (error: any) {
-    console.error("Error creating admin:", error);
+    console.error("Error deleting admin:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       {

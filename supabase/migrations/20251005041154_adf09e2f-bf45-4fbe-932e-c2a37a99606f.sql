@@ -12,6 +12,33 @@ DROP TABLE IF EXISTS quick_replies CASCADE;
 DROP TABLE IF EXISTS ai_memory CASCADE;
 DROP TABLE IF EXISTS activities CASCADE;
 DROP TABLE IF EXISTS settings CASCADE;
+DROP TABLE IF EXISTS support_users CASCADE;
+DROP TABLE IF EXISTS subscriptions CASCADE;
+
+-- TABELA: support_users (usuários de suporte)
+CREATE TABLE support_users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  full_name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  phone TEXT,
+  matricula TEXT NOT NULL UNIQUE,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- TABELA: subscriptions (assinaturas dos usuários)
+CREATE TABLE subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE,
+  email TEXT NOT NULL,
+  full_name TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('active', 'expired', 'pending', 'canceled')),
+  plan_name TEXT,
+  duration_days INTEGER,
+  expires_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
 
 -- 2. TABELA: whatsapp_connections (instâncias Evolution API)
 CREATE TABLE whatsapp_connections (
@@ -144,6 +171,19 @@ CREATE INDEX idx_room_members_user ON room_members(user_id);
 -- TRIGGERS PARA updated_at
 -- ============================================
 
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+   NEW.updated_at = now();
+   RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_subscriptions_updated_at
+  BEFORE UPDATE ON subscriptions
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_whatsapp_connections_updated_at
   BEFORE UPDATE ON whatsapp_connections
   FOR EACH ROW
@@ -178,6 +218,7 @@ CREATE TRIGGER update_settings_updated_at
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================
 
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE whatsapp_connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE support_rooms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE room_members ENABLE ROW LEVEL SECURITY;
@@ -187,6 +228,21 @@ ALTER TABLE ai_memory ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quick_replies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE support_users ENABLE ROW LEVEL SECURITY;
+
+-- POLÍTICAS: subscriptions
+CREATE POLICY "Admins can manage subscriptions"
+  ON subscriptions FOR ALL
+  USING (has_role(auth.uid(), 'admin') OR is_super_admin(auth.uid()));
+
+CREATE POLICY "Users can view their own subscription"
+  ON subscriptions FOR SELECT
+  USING (user_id = auth.uid());
+
+-- POLÍTICAS: support_users
+CREATE POLICY "Admins can manage support users"
+  ON support_users FOR ALL
+  USING (has_role(auth.uid(), 'admin') OR is_super_admin(auth.uid()));
 
 -- POLÍTICAS: whatsapp_connections
 CREATE POLICY "Admins can view their own connections"
