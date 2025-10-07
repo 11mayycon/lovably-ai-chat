@@ -60,8 +60,15 @@ export default function ManageSupport() {
   const loadAdminData = async () => {
     if (loading) setLoading(true);
     try {
+       const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão não encontrada. Faça o login novamente.");
+
       // Busca as salas usando a nova Edge Function segura
-      const { data: roomsData, error: roomsError } = await supabase.functions.invoke("get-all-support-rooms");
+      const { data: roomsData, error: roomsError } = await supabase.functions.invoke("get-all-support-rooms", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
       if (roomsError) throw new Error(roomsError.message);
       if (roomsData.error) throw new Error(roomsData.error);
 

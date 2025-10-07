@@ -11,18 +11,29 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { auth: { persistSession: false } }
-    );
+    const supabaseUrl = Deno.env.get("PROJECT_URL");
+    const serviceKey = Deno.env.get("PROJECT_SERVICE_ROLE_KEY");
 
-    const authHeader = req.headers.get("Authorization")!;
+    if (!supabaseUrl || !serviceKey) {
+      throw new Error("As variáveis de ambiente PROJECT_URL e PROJECT_SERVICE_ROLE_KEY são obrigatórias.");
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false },
+    });
+
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      throw new Error("Cabeçalho de autorização não encontrado.");
+    }
+    
     const jwt = authHeader.replace("Bearer ", "");
     const { data: { user } } = await supabaseAdmin.auth.getUser(jwt);
-    if (!user) throw new Error("Usuário inválido ou não autenticado.");
+    if (!user) {
+      throw new Error("Usuário inválido ou não autenticado.");
+    }
 
-    // 1. Buscar todas as salas com seus membros
+    // 1. Fetch all support rooms with their members
     const { data: roomsData, error: roomsError } = await supabaseAdmin
       .from("support_rooms")
       .select(`
@@ -31,33 +42,55 @@ Deno.serve(async (req) => {
         `)
       .order("created_at", { ascending: false });
 
-    if (roomsError) throw roomsError;
+    if (roomsError) {
+      console.error('Error fetching support rooms:', roomsError.message);
+      throw new Error(`Erro ao buscar salas: ${roomsError.message}`);
+    }
 
-    // 2. Buscar todos os usuários de suporte
-    const { data: usersData, error: usersError } = await supabaseAdmin
-      .from("support_users")
-      .select("*");
+    if (!roomsData || roomsData.length === 0) {
+      return new Response(JSON.stringify({ rooms: [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
 
-    if (usersError) throw usersError;
+    // 2. Extract all unique support user IDs from the rooms
+    const userIds = [...new Set(roomsData.map(room => room.support_user_id).filter(id => id))];
 
-    // 3. Combinar os dados em código (lógica mais segura)
-    const usersMap = new Map(usersData.map(u => [u.id, u]));
+    // 3. Fetch the corresponding support users
+    const usersMap = new Map();
+    if (userIds.length > 0) {
+        const { data: usersData, error: usersError } = await supabaseAdmin
+            .from("support_users")
+            .select("*")
+            .in("id", userIds);
 
-    const roomsWithUsers = roomsData.map(room => ({
-      ...room,
-      support_users: usersMap.get(room.support_user_id) // Nome da propriedade que o frontend espera
+        if (usersError) {
+            console.error('Error fetching support users:', usersError.message);
+            throw new Error(`Erro ao buscar usuários de suporte: ${usersError.message}`);
+        }
+        
+        if (usersData) {
+            usersData.forEach(user => usersMap.set(user.id, user));
+        }
+    }
+
+    // 4. Join the data in the application code
+    const combinedData = roomsData.map(room => ({
+        ...room,
+        support_users: usersMap.get(room.support_user_id) || null
     }));
 
-    return new Response(JSON.stringify({ rooms: roomsWithUsers || [] }), {
+    return new Response(JSON.stringify({ rooms: combinedData }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
 
   } catch (error) {
     console.error('Erro na função get-all-support-rooms:', error.message);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: `Falha na função: ${error.message}` }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500, // Usar 500 para erro de servidor
+      status: 500,
     });
   }
 });

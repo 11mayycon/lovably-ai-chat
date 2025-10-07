@@ -25,6 +25,7 @@ import UsersManagement from "./pages/admin/UsersManagement";
 import RoomsList from "./pages/support/RoomsList";
 import Chat from "./pages/support/Chat";
 import NotFound from "./pages/NotFound";
+import AIChatSupport from "./pages/support/AIChat";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const App = () => (
             <Route path="/admin/settings" element={<AdminLayout><Settings /></AdminLayout>} />
             <Route path="/support/rooms" element={<RoomsList />} />
             <Route path="/support/chat" element={<Chat />} />
+            <Route path="/support/ai-chat" element={<AIChatSupport />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
