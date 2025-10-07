@@ -13,19 +13,20 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const EVOLUTION_API_URL = Deno.env.get("EVOLUTION_API_URL");
-    const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
+    const EVOLUTION_API_URL = Deno.env.get("EVO_BASE_URL");
+    const EVOLUTION_API_KEY = Deno.env.get("EVO_API_KEY");
 
     if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
-      throw new Error("Credenciais da Evolution API não encontradas no Supabase.");
+      throw new Error("Credenciais da Evolution API não configuradas.");
     }
 
-    // CORREÇÃO: Extrair 'numeroWhatsApp' do corpo da requisição
+    console.log("[EVOLUTION] API URL:", EVOLUTION_API_URL);
+
     const { action, instanceName, numeroWhatsApp } = await req.json();
+    console.log(`[EVOLUTION] Action: ${action}, Instance: ${instanceName || 'new'}`);
 
     switch (action) {
       case '''createInstance''':
-        // CORREÇÃO: Passar 'numeroWhatsApp' para a função de criação
         return await handleCreateInstance(EVOLUTION_API_URL, EVOLUTION_API_KEY, numeroWhatsApp);
       case '''checkStatus''':
         if (!instanceName) throw new Error("O '''instanceName''' é obrigatório para '''checkStatus'''.");
@@ -37,7 +38,7 @@ Deno.serve(async (req) => {
         throw new Error(`Ação desconhecida: ${action}`);
     }
   } catch (err) {
-    console.error("[EVOLUTION-FUNCTION-ERROR]", err);
+    console.error("[EVOLUTION-ERROR]", err);
     return new Response(
       JSON.stringify({ success: false, error: err.message }),
       {
@@ -48,10 +49,9 @@ Deno.serve(async (req) => {
   }
 });
 
-// CORREÇÃO: A função agora aceita 'numeroWhatsApp'
 async function handleCreateInstance(apiUrl: string, apiKey: string, numeroWhatsApp: string | undefined) {
   if (!numeroWhatsApp) {
-    throw new Error("O campo '''numeroWhatsApp''' é obrigatório para criar uma instância.");
+    throw new Error("O campo 'numeroWhatsApp' é obrigatório para criar uma instância.");
   }
 
   const generatedInstanceName = `isa_instance_${Date.now().toString(36)}`;
@@ -62,7 +62,17 @@ async function handleCreateInstance(apiUrl: string, apiKey: string, numeroWhatsA
     instanceName: generatedInstanceName,
     token,
     qrcode: true,
-    number: numeroWhatsApp, // CORREÇÃO: Usando o número fornecido pelo frontend
+    number: numeroWhatsApp,
+    webhook: `${Deno.env.get("SUPABASE_URL")}/functions/v1/evolution-webhook`,
+    webhook_by_events: true,
+    events: [
+      "APPLICATION_STARTUP",
+      "QRCODE_UPDATED",
+      "CONNECTION_UPDATE",
+      "MESSAGES_UPSERT",
+      "MESSAGES_UPDATE",
+      "SEND_MESSAGE"
+    ]
   };
   
   const apiHeaders = {
@@ -70,7 +80,7 @@ async function handleCreateInstance(apiUrl: string, apiKey: string, numeroWhatsA
     '''apikey''': apiKey,
   };
 
-  console.log("Enviando para a Evolution API:", JSON.stringify(requestBody));
+  console.log("[EVOLUTION] Criando instância:", generatedInstanceName);
 
   const evolutionResponse = await fetch(url, {
     method: '''POST''',
@@ -82,7 +92,29 @@ async function handleCreateInstance(apiUrl: string, apiKey: string, numeroWhatsA
 
   if (!evolutionResponse.ok) {
     const errorMessage = responseBody.message || responseBody.error || JSON.stringify(responseBody);
-    throw new Error(`A Evolution API retornou um erro (Status: ${evolutionResponse.status}): ${errorMessage}`);
+    throw new Error(`A Evolution API retornou erro (Status: ${evolutionResponse.status}): ${errorMessage}`);
+  }
+
+  console.log("[EVOLUTION] Instância criada com sucesso");
+
+  // Aguardar 3 segundos para a instância inicializar
+  await new Promise(resolve => setTimeout(resolve, 3000));
+
+  // Tentar obter o QR Code
+  try {
+    const connectUrl = `${apiUrl}/instance/connect/${generatedInstanceName}`;
+    const qrResponse = await fetch(connectUrl, { 
+      method: '''GET''', 
+      headers: { '''apikey''': apiKey } 
+    });
+    
+    if (qrResponse.ok) {
+      const qrData = await qrResponse.json();
+      responseBody.qrcode = qrData.qrcode;
+      console.log("[EVOLUTION] QR Code obtido com sucesso");
+    }
+  } catch (qrError) {
+    console.error("[EVOLUTION] Erro ao obter QR Code:", qrError);
   }
 
   return new Response(
@@ -94,40 +126,53 @@ async function handleCreateInstance(apiUrl: string, apiKey: string, numeroWhatsA
   );
 }
 
-// (As funções handleCheckStatus e handleDeleteInstance permanecem as mesmas)
 async function handleCheckStatus(apiUrl: string, apiKey: string, instanceName: string) {
-    const url = `${apiUrl}/instance/connectionState/${instanceName}`;
-    const apiHeaders = { '''apikey''': apiKey };
-    const evolutionResponse = await fetch(url, { method: '''GET''', headers: apiHeaders });
-    const responseBody = await evolutionResponse.json();
-    if (!evolutionResponse.ok) {
-      const errorMessage = responseBody.message || responseBody.error || JSON.stringify(responseBody);
-      throw new Error(`Erro ao verificar status (Status: ${evolutionResponse.status}): ${errorMessage}`);
-    }
-    return new Response(JSON.stringify({ success: true, data: responseBody }), {
-      headers: { ...corsHeaders, '''Content-Type''': '''application/json''' },
-      status: 200,
-    });
+  const url = `${apiUrl}/instance/connectionState/${instanceName}`;
+  const apiHeaders = { '''apikey''': apiKey };
+  
+  console.log("[EVOLUTION] Verificando status:", instanceName);
+  
+  const evolutionResponse = await fetch(url, { method: '''GET''', headers: apiHeaders });
+  const responseBody = await evolutionResponse.json();
+  
+  if (!evolutionResponse.ok) {
+    const errorMessage = responseBody.message || responseBody.error || JSON.stringify(responseBody);
+    throw new Error(`Erro ao verificar status (Status: ${evolutionResponse.status}): ${errorMessage}`);
+  }
+  
+  console.log("[EVOLUTION] Status:", responseBody.instance?.state);
+  
+  return new Response(JSON.stringify({ success: true, data: responseBody }), {
+    headers: { ...corsHeaders, '''Content-Type''': '''application/json''' },
+    status: 200,
+  });
 }
 async function handleDeleteInstance(apiUrl: string, apiKey: string, instanceName: string) {
-    const url = `${apiUrl}/instance/logout/${instanceName}`;
-    const apiHeaders = { '''apikey''': apiKey };
-    const evolutionResponse = await fetch(url, { method: '''DELETE''', headers: apiHeaders });
-    if (!evolutionResponse.ok) {
-      try {
-          const responseBody = await evolutionResponse.json();
-          if (responseBody.message && responseBody.message.includes("instance not found")) {
-              // Continua se a instância não for encontrada
-          } else {
-              const errorMessage = responseBody.message || responseBody.error || JSON.stringify(responseBody);
-              throw new Error(`Erro ao deletar instância (Status: ${evolutionResponse.status}): ${errorMessage}`);
-          }
-      } catch (e) {
-          throw new Error(`Erro ao deletar instância (Status: ${evolutionResponse.status})`);
+  const url = `${apiUrl}/instance/logout/${instanceName}`;
+  const apiHeaders = { '''apikey''': apiKey };
+  
+  console.log("[EVOLUTION] Deletando instância:", instanceName);
+  
+  const evolutionResponse = await fetch(url, { method: '''DELETE''', headers: apiHeaders });
+  
+  if (!evolutionResponse.ok) {
+    try {
+      const responseBody = await evolutionResponse.json();
+      if (responseBody.message && responseBody.message.includes("instance not found")) {
+        console.log("[EVOLUTION] Instância já não existe");
+      } else {
+        const errorMessage = responseBody.message || responseBody.error || JSON.stringify(responseBody);
+        throw new Error(`Erro ao deletar instância (Status: ${evolutionResponse.status}): ${errorMessage}`);
       }
+    } catch (e) {
+      if (e.message.includes("Erro ao deletar")) throw e;
     }
-    return new Response(JSON.stringify({ success: true, data: { message: "Instância desconectada com sucesso." } }), {
-      headers: { ...corsHeaders, '''Content-Type''': '''application/json''' },
-      status: 200,
-    });
+  }
+  
+  console.log("[EVOLUTION] Instância desconectada com sucesso");
+  
+  return new Response(JSON.stringify({ success: true, data: { message: "Instância desconectada com sucesso." } }), {
+    headers: { ...corsHeaders, '''Content-Type''': '''application/json''' },
+    status: 200,
+  });
 }
