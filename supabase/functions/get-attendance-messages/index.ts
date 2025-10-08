@@ -25,18 +25,36 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify ownership
+    // Verify access: by ownership (agent) OR by room ownership of support user
     const { data: att, error: attErr } = await supabase
       .from("attendances")
-      .select("id, agent_id")
+      .select("id, agent_id, room_id")
       .eq("id", attendance_id)
       .maybeSingle();
     if (attErr) throw attErr;
-    if (!att || att.agent_id !== support_user_id) {
+
+    if (!att) {
       return new Response(
-        JSON.stringify({ error: "Acesso negado" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Atendimento não encontrado" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    if (att.agent_id !== support_user_id) {
+      // Check room ownership
+      const { data: room, error: roomErr } = await supabase
+        .from("support_rooms")
+        .select("id")
+        .eq("id", att.room_id)
+        .eq("support_user_id", support_user_id)
+        .maybeSingle();
+      if (roomErr) throw roomErr;
+      if (!room) {
+        return new Response(
+          JSON.stringify({ error: "Acesso negado" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const { data: msgs, error: msgsErr } = await supabase

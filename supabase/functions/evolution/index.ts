@@ -141,6 +141,9 @@ Deno.serve(async (req: Request) => {
         console.log("🟢 createInstance ->", name);
         console.log("📥 Body:", JSON.stringify(redact(body)));
 
+        // URL do webhook aponta para a edge function
+        const webhookUrl = `${SUPABASE_URL}/functions/v1/whatsapp-webhook`;
+        
         const response = await evoFetch(`${EVOLUTION_API_URL}/instance/create`, {
           method: "POST",
           headers: {
@@ -149,7 +152,19 @@ Deno.serve(async (req: Request) => {
           },
           body: JSON.stringify({
             instanceName: name,
+<<<<<<< HEAD
             webhookUrl: "https://tcswbkvsatskhaskwnit.supabase.co/functions/v1/webhook-handler",
+=======
+            webhookUrl: webhookUrl,
+            webhook: {
+              enabled: true,
+              events: [
+                "messages.upsert",
+                "messages.update",
+                "connection.update"
+              ]
+            },
+>>>>>>> afdffd662ec151b38454a8a1e98294f01622d468
             integration: "WHATSAPP-BAILEYS",
             qrcode: true,
           }),

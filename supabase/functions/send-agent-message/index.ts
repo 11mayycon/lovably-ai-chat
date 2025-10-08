@@ -25,19 +25,35 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify ownership: the attendance must belong to the support user
+    // Verify access: the attendance is owned by agent OR room belongs to the support user
     const { data: attendance, error: attErr } = await supabase
       .from("attendances")
-      .select("id, agent_id")
+      .select("id, agent_id, room_id, client_phone, whatsapp_connection_id")
       .eq("id", attendance_id)
       .maybeSingle();
 
     if (attErr) throw attErr;
-    if (!attendance || attendance.agent_id !== support_user_id) {
+    if (!attendance) {
       return new Response(
-        JSON.stringify({ error: "Acesso negado ao atendimento" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "Atendimento não encontrado" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    if (attendance.agent_id !== support_user_id) {
+      const { data: room, error: roomErr } = await supabase
+        .from("support_rooms")
+        .select("id")
+        .eq("id", attendance.room_id)
+        .eq("support_user_id", support_user_id)
+        .maybeSingle();
+      if (roomErr) throw roomErr;
+      if (!room) {
+        return new Response(
+          JSON.stringify({ error: "Acesso negado ao atendimento" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const { error: insertError } = await supabase.from("messages").insert({
