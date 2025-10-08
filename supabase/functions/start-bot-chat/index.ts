@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       client_name: support_user_name || "Assistente IA",
       client_phone: "bot_chat",
       status: "in_progress",
-      assigned_to: "agent",
+      assigned_to: "ai",
       started_at: new Date().toISOString(),
     } as const;
 

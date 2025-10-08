@@ -175,9 +175,14 @@ const Chat = () => {
   const loadMessages = async () => {
     if (!selectedContact?.id) return;
     try {
-      const { data, error } = await supabase.from('messages').select('*').eq('attendance_id', selectedContact.id).order('created_at', { ascending: true });
+      const supportData = sessionStorage.getItem('support_user');
+      if (!supportData || !selectedContact?.id) return;
+      const supportUser = JSON.parse(supportData);
+      const { data: resp, error } = await supabase.functions.invoke('get-attendance-messages', {
+        body: { attendance_id: selectedContact.id, support_user_id: supportUser.id }
+      });
       if (error) throw error;
-      setChatMessages(data || []);
+      setChatMessages(resp?.messages || []);
     } catch (error) {
       console.error('Error loading messages:', error);
     }
@@ -200,9 +205,11 @@ const Chat = () => {
       if (!supportData) return;
       const supportUser = JSON.parse(supportData);
 
-      const messagePayload = { attendance_id: selectedContact.id, sender_type: 'agent' as const, sender_id: supportUser.id, content: message };
-      const { error: insertError } = await supabase.from('messages').insert(messagePayload);
-      if (insertError) throw insertError;
+      // Envia mensagem via função pública para evitar RLS
+      const { error: sendError, data: sendData } = await supabase.functions.invoke('send-agent-message', {
+        body: { attendance_id: selectedContact.id, support_user_id: supportUser.id, content: message }
+      });
+      if (sendError || sendData?.error) throw sendError || new Error(sendData?.error);
       setMessage("");
 
       if (selectedContact.client_phone === 'bot_chat') {
@@ -212,6 +219,9 @@ const Chat = () => {
           console.error("Function invocation error:", funcError);
         }
       }
+      // Recarrega mensagens após envio/IA
+      await new Promise((r) => setTimeout(r, 400));
+      await loadMessages();
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error("Erro ao enviar mensagem");
