@@ -251,9 +251,12 @@ const Chat = () => {
       if (existing) {
         setSelectedContact(existing);
       } else {
-        const { data: newChat, error: createError } = await supabase.from('attendances').insert({ room_id: room.id, agent_id: supportUser.id, client_name: botMember.full_name, client_phone: 'bot_chat', status: 'in_progress', assigned_to: 'agent', started_at: new Date().toISOString() }).select().single();
-        if (createError) throw createError;
-        setSelectedContact(newChat);
+        // Use backend function to bypass RLS when creating bot chat
+        const { data: resp, error: funcErr } = await supabase.functions.invoke('start-bot-chat', {
+          body: { room_id: room.id, support_user_id: supportUser.id, support_user_name: botMember.full_name }
+        });
+        if (funcErr || !resp?.success) throw funcErr || new Error(resp?.error || 'Falha ao criar chat');
+        setSelectedContact(resp.attendance);
       }
     } catch (error) {
       console.error("Erro ao iniciar conversa com assistente:", error);
