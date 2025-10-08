@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { supabasePublic } from "@/lib/supabase-public-client";
 import { Shield, UserPlus, Lock, Unlock, Calendar, RefreshCw, Trash2 } from "lucide-react";
 import { 
   Dialog, 
@@ -56,7 +56,7 @@ const UsersManagement = () => {
   const loadSubscriptions = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from("subscriptions")
         .select("*")
         .order("created_at", { ascending: false });
@@ -92,7 +92,7 @@ const UsersManagement = () => {
       return;
     }
     try {
-      const { error } = await supabase.functions.invoke("create-admin", {
+      const { error } = await supabasePublic.functions.invoke("create-admin", {
         body: {
           full_name: newAdminName,
           email: newAdminEmail,
@@ -125,7 +125,7 @@ const UsersManagement = () => {
 
   const handleDeleteAdmin = async (userId: string) => {
     try {
-      const { error } = await supabase.functions.invoke("delete-admin", {
+      const { error } = await supabasePublic.functions.invoke("delete-admin", {
         body: { userId },
       });
 
@@ -150,7 +150,7 @@ const UsersManagement = () => {
     try {
       const newStatus = currentStatus === "active" ? "expired" : "active";
       
-      const { error } = await supabase
+      const { error } = await supabasePublic
         .from("subscriptions")
         .update({ status: newStatus })
         .eq("user_id", userId);
@@ -179,7 +179,7 @@ const UsersManagement = () => {
       const expiryDate = baseDate > now ? baseDate : now;
       expiryDate.setDate(expiryDate.getDate() + 30);
 
-      const { error } = await supabase
+      const { error } = await supabasePublic
         .from("subscriptions")
         .update({
           status: "active",
