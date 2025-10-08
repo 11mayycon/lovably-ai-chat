@@ -33,7 +33,7 @@ const AIChat = () => {
     try {
       const contextChat = messages.slice(-6); // Pega as últimas 6 mensagens como contexto
 
-      const { data, error } = await supabase.functions.invoke("groq-message-handler", {
+      const { data, error } = await supabase.functions.invoke("ai-direct-chat", {
         body: { message: input, contextChat },
       });
 

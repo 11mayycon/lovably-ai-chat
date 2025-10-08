@@ -25,6 +25,7 @@ import ManageSupport from "./pages/admin/ManageSupport";
 import UsersManagement from "./pages/admin/UsersManagement";
 import RoomsList from "./pages/support/RoomsList";
 import Chat from "./pages/support/Chat";
+import ChatNew from "./pages/support/ChatNew";
 import NotFound from "./pages/NotFound";
 import AIChatSupport from "./pages/support/AIChat";
 
@@ -56,7 +57,8 @@ const App = () => (
             <Route path="/admin/reports" element={<AdminLayout><Reports /></AdminLayout>} />
             <Route path="/admin/settings" element={<AdminLayout><Settings /></AdminLayout>} />
             <Route path="/support/rooms" element={<RoomsList />} />
-            <Route path="/support/chat" element={<Chat />} />
+            <Route path="/support/chat" element={<ChatNew />} />
+            <Route path="/support/chat-new" element={<ChatNew />} />
             <Route path="/support/ai-chat" element={<AIChatSupport />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
