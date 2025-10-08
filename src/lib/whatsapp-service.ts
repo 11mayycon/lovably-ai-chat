@@ -184,23 +184,23 @@ class WhatsAppService {
 
       if (response.success && response.data) {
         const statusData = response.data as any;
-        const newStatus = statusData.instance?.state === 'open' ? 'connected' : 'connecting';
+        const rawState = statusData?.instance?.state || statusData?.instance?.status || statusData?.state || statusData?.status;
+        const isOpen = typeof rawState === 'string' && /open|connected/i.test(rawState);
+        const newStatus: WhatsAppInstance['status'] = isOpen ? 'connected' : 'connecting';
 
         // Atualizar no banco
         instanceDb.updateStatus(instanceName, newStatus);
 
         // Atualizar cache
-        const instance = this.instances.get(instanceName);
-        if (instance) {
-          instance.status = newStatus;
-          if (statusData.instance?.profileName) {
-            instance.profileName = statusData.instance.profileName;
-          }
-          if (statusData.instance?.phoneNumber) {
-            instance.phoneNumber = statusData.instance.phoneNumber;
-          }
-          this.instances.set(instanceName, instance);
+        const existing = this.instances.get(instanceName) || { instanceName, status: newStatus } as WhatsAppInstance;
+        existing.status = newStatus;
+        if (isOpen) {
+          // Limpa QR ao conectar
+          existing.qrCode = undefined;
         }
+        if (statusData.instance?.profileName) existing.profileName = statusData.instance.profileName;
+        if (statusData.instance?.phoneNumber) existing.phoneNumber = statusData.instance.phoneNumber;
+        this.instances.set(instanceName, existing);
 
         return { success: true, data: statusData };
       }

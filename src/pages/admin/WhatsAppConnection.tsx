@@ -72,14 +72,20 @@ export default function WhatsAppConnection() {
       
       const result = await whatsappService.checkInstanceStatus(instance.instanceName);
 
-      if (result.success && result.data?.instance?.state === 'open' && instance.status !== 'connected') {
-        setInstance(prev => prev ? { ...prev, status: 'connected' } : null);
-        
-        toast.success('WhatsApp conectado com sucesso! Sincronizando contatos...');
+      const data = result.data as any;
+      const state = data?.instance?.state || data?.state || data?.instance?.status || data?.status;
+      const isOpen = typeof state === 'string' && /open|connected/i.test(state);
 
+      if (result.success && isOpen && instance.status !== 'connected') {
+        setInstance(prev => prev ? { ...prev, status: 'connected', qrCode: undefined } : null);
+        toast.success('WhatsApp conectado com sucesso! Sincronizando contatos...');
         await loadContacts();
         return true;
       }
+
+      // Atualiza o estado local com os dados do serviço (cache) para refletir mudanças
+      const updated = whatsappService.getInstance(instance.instanceName);
+      if (updated) setInstance(updated);
       
       return result.success;
     } catch (error) {
