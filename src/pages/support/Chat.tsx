@@ -118,46 +118,33 @@ const Chat = () => {
       if (roomData) {
         const room = JSON.parse(roomData);
         
-        // Check if there's an AI bot member in this room
-        const { data: botMembers, error: botError } = await supabase
-          .from('room_members')
+        // Check if there's an existing bot chat
+        const { data: existingBotChat, error: botChatError } = await supabase
+          .from('attendances')
           .select('*')
           .eq('room_id', room.id)
-          .eq('is_bot', true);
+          .eq('agent_id', supportUser.id)
+          .eq('client_phone', 'bot_chat')
+          .maybeSingle();
 
-        if (!botError && botMembers && botMembers.length > 0) {
-          const botMember = botMembers[0];
-          
-          // Check if there's an existing bot chat
-          const { data: existingBotChat, error: botChatError } = await supabase
-            .from('attendances')
-            .select('*')
-            .eq('room_id', room.id)
-            .eq('agent_id', supportUser.id)
-            .eq('client_phone', 'bot_chat')
-            .maybeSingle();
-
-          if (!botChatError && existingBotChat) {
-            // Add the existing bot chat to attendances
-            setMyAttendances([existingBotChat, ...(regularAttendances || [])]);
-          } else {
-            // Create a virtual bot contact that appears as a client
-            const virtualBotContact = {
-              id: `bot_${room.id}`,
-              room_id: room.id,
-              agent_id: supportUser.id,
-              client_name: (botMember as any).full_name,
-              client_phone: 'bot_chat',
-              status: 'available',
-              assigned_to: 'agent',
-              started_at: new Date().toISOString(),
-              is_virtual_bot: true
-            };
-            
-            setMyAttendances([virtualBotContact, ...(regularAttendances || [])]);
-          }
+        if (!botChatError && existingBotChat) {
+          // Add the existing bot chat to attendances
+          setMyAttendances([existingBotChat, ...(regularAttendances || [])]);
         } else {
-          setMyAttendances(regularAttendances || []);
+          // Create a virtual bot contact that appears as a client
+          const virtualBotContact = {
+            id: `bot_${room.id}`,
+            room_id: room.id,
+            agent_id: supportUser.id,
+            client_name: 'Assistente IA',
+            client_phone: 'bot_chat',
+            status: 'available',
+            assigned_to: 'agent',
+            started_at: new Date().toISOString(),
+            is_virtual_bot: true
+          };
+          
+          setMyAttendances([virtualBotContact, ...(regularAttendances || [])]);
         }
       } else {
         setMyAttendances(regularAttendances || []);
