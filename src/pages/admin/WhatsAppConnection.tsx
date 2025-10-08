@@ -22,29 +22,24 @@ export default function WhatsAppConnection() {
 
   // Polling para verificar status da instância quando está conectando
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    let errorCount = 0;
+    let interval: NodeJS.Timeout | undefined;
+    let timeout: NodeJS.Timeout | undefined;
     
     if (instance?.status === 'connecting') {
+      // Verifica a cada 3s
       interval = setInterval(async () => {
-        const result = await checkInstanceStatus();
-        
-        // Se receber muitos erros consecutivos, para o polling
-        if (!result) {
-          errorCount++;
-          if (errorCount >= 5) {
-            clearInterval(interval);
-            toast.error('Não foi possível verificar o status. Tente gerar um novo QR Code.');
-            setInstance(null);
-          }
-        } else {
-          errorCount = 0;
-        }
-      }, 2000); // Verifica a cada 2 segundos (mais rápido)
+        await checkInstanceStatus();
+      }, 3000);
+
+      // Mantém o QR code ativo por até 3 minutos antes de sugerir renovação
+      timeout = setTimeout(() => {
+        toast.info('O QR Code pode ter expirado. Clique em "Gerar QR Code" para renovar.');
+      }, 180000); // 3 minutos
     }
 
     return () => {
       if (interval) clearInterval(interval);
+      if (timeout) clearTimeout(timeout);
     };
   }, [instance?.status]);
 
