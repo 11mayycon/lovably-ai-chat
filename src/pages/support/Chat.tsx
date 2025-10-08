@@ -177,41 +177,6 @@ const Chat = () => {
         return;
       }
 
-<<<<<<< HEAD
-      // Para contatos do WhatsApp, carregar mensagens do banco
-      const { data: messages, error } = await supabase
-        .from('messages')
-        .select(`
-          id,
-          content,
-          direction,
-          created_at,
-          contact_id,
-          contacts (
-            id,
-            name,
-            number
-          )
-        `)
-        .eq('contact_id', selectedContact.id)
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        console.error('Erro ao carregar mensagens:', error);
-        setChatMessages([]);
-        return;
-      }
-
-      // Converter mensagens para o formato esperado
-      const formattedMessages = messages?.map(msg => ({
-        id: msg.id,
-        content: msg.content,
-        sender_type: msg.direction === 'in' ? 'customer' : 'agent',
-        created_at: msg.created_at
-      })) || [];
-
-      setChatMessages(formattedMessages);
-=======
       // Buscar mensagens via função (bypass RLS)
       const supportData = sessionStorage.getItem('support_user');
       const support = supportData ? JSON.parse(supportData) : null;
@@ -227,7 +192,6 @@ const Chat = () => {
 
       const msgs = data?.messages || [];
       setChatMessages(msgs);
->>>>>>> afdffd662ec151b38454a8a1e98294f01622d468
     } catch (error) {
       console.error('Error loading messages:', error);
       setChatMessages([]);
@@ -267,48 +231,6 @@ const Chat = () => {
           setChatMessages(prev => [...prev, aiMessage]);
         }
       } else {
-<<<<<<< HEAD
-        // Para contatos do WhatsApp, enviar via Evolution API
-        try {
-          const { data: evolutionData, error: evolutionError } = await supabase.functions.invoke("evolution", {
-            body: { 
-              action: "sendMessage",
-              instanceName: "isa_admin_mgi2eu59", // Usar a instância conectada
-              number: selectedContact.phone,
-              message: message
-            },
-          });
-
-          if (evolutionError) throw evolutionError;
-
-          if (evolutionData?.success) {
-            // Salvar mensagem no banco de dados
-            const { error: dbError } = await supabase
-              .from('messages')
-              .insert({
-                contact_id: selectedContact.id,
-                instance_id: "isa_admin_mgi2eu59",
-                content: message,
-                direction: 'out',
-                created_at: new Date().toISOString()
-              });
-
-            if (dbError) {
-              console.error('Erro ao salvar mensagem no banco:', dbError);
-            }
-
-            toast.success("Mensagem enviada com sucesso!");
-          } else {
-            throw new Error(evolutionData?.error || "Erro ao enviar mensagem");
-          }
-        } catch (evolutionError) {
-          console.error('Erro ao enviar via Evolution API:', evolutionError);
-          toast.error("Erro ao enviar mensagem via WhatsApp");
-          
-          // Remover a mensagem da interface se houve erro
-          setChatMessages(prev => prev.filter(msg => msg.id !== userMessage.id));
-        }
-=======
         // 1) Salvar mensagem no banco via função segura
         const { error: sendError } = await supabase.functions.invoke('send-agent-message', {
           body: {
@@ -334,7 +256,6 @@ const Chat = () => {
 
         // 3) Recarregar mensagens
         await loadMessages();
->>>>>>> afdffd662ec151b38454a8a1e98294f01622d468
       }
 
       setMessage("");

@@ -152,9 +152,6 @@ Deno.serve(async (req: Request) => {
           },
           body: JSON.stringify({
             instanceName: name,
-<<<<<<< HEAD
-            webhookUrl: "https://tcswbkvsatskhaskwnit.supabase.co/functions/v1/webhook-handler",
-=======
             webhookUrl: webhookUrl,
             webhook: {
               enabled: true,
@@ -164,7 +161,6 @@ Deno.serve(async (req: Request) => {
                 "connection.update"
               ]
             },
->>>>>>> afdffd662ec151b38454a8a1e98294f01622d468
             integration: "WHATSAPP-BAILEYS",
             qrcode: true,
           }),
