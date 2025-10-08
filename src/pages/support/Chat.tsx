@@ -256,6 +256,7 @@ const Chat = () => {
         setSelectedContact(newChat);
       }
     } catch (error) {
+      console.error("Erro ao iniciar conversa com assistente:", error);
       toast.error("Não foi possível iniciar conversa com o assistente.");
     }
   };
