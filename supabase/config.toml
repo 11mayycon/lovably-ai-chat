@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.evolution]
 verify_jwt = false
 
+[functions.webhook-handler]
+verify_jwt = false
+
 [functions.support-login]
 verify_jwt = false
 

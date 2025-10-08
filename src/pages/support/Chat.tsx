@@ -27,6 +27,41 @@ const Chat = () => {
   useEffect(() => {
     if (selectedContact) {
       loadMessages();
+      
+      // Configurar listener para mensagens em tempo real (apenas para contatos do WhatsApp)
+      if (selectedContact.id !== "groq-ai") {
+        const channel = supabase
+          .channel('messages')
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'messages',
+              filter: `contact_id=eq.${selectedContact.id}`
+            },
+            (payload) => {
+              console.log('Nova mensagem recebida:', payload);
+              
+              if (payload.eventType === 'INSERT') {
+                const newMessage = {
+                  id: payload.new.id,
+                  content: payload.new.content,
+                  sender_type: payload.new.direction === 'in' ? 'customer' : 'agent',
+                  created_at: payload.new.created_at
+                };
+                
+                setChatMessages(prev => [...prev, newMessage]);
+              }
+            }
+          )
+          .subscribe();
+
+        // Cleanup do listener quando o contato mudar ou componente desmontar
+        return () => {
+          supabase.removeChannel(channel);
+        };
+      }
     }
   }, [selectedContact]);
 
@@ -128,10 +163,42 @@ const Chat = () => {
         return;
       }
 
-      // Para contatos do WhatsApp, carregar mensagens se houver
-      setChatMessages([]);
+      // Para contatos do WhatsApp, carregar mensagens do banco
+      const { data: messages, error } = await supabase
+        .from('messages')
+        .select(`
+          id,
+          content,
+          direction,
+          created_at,
+          contact_id,
+          contacts (
+            id,
+            name,
+            number
+          )
+        `)
+        .eq('contact_id', selectedContact.id)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Erro ao carregar mensagens:', error);
+        setChatMessages([]);
+        return;
+      }
+
+      // Converter mensagens para o formato esperado
+      const formattedMessages = messages?.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        sender_type: msg.direction === 'in' ? 'customer' : 'agent',
+        created_at: msg.created_at
+      })) || [];
+
+      setChatMessages(formattedMessages);
     } catch (error) {
       console.error('Error loading messages:', error);
+      setChatMessages([]);
     }
   };
 
@@ -172,8 +239,46 @@ const Chat = () => {
           setChatMessages(prev => [...prev, aiMessage]);
         }
       } else {
-        // Para contatos do WhatsApp, implementar envio via Evolution API
-        toast.info("Envio para WhatsApp será implementado em breve");
+        // Para contatos do WhatsApp, enviar via Evolution API
+        try {
+          const { data: evolutionData, error: evolutionError } = await supabase.functions.invoke("evolution", {
+            body: { 
+              action: "sendMessage",
+              instanceName: "isa_admin_mgi2eu59", // Usar a instância conectada
+              number: selectedContact.phone,
+              message: message
+            },
+          });
+
+          if (evolutionError) throw evolutionError;
+
+          if (evolutionData?.success) {
+            // Salvar mensagem no banco de dados
+            const { error: dbError } = await supabase
+              .from('messages')
+              .insert({
+                contact_id: selectedContact.id,
+                instance_id: "isa_admin_mgi2eu59",
+                content: message,
+                direction: 'out',
+                created_at: new Date().toISOString()
+              });
+
+            if (dbError) {
+              console.error('Erro ao salvar mensagem no banco:', dbError);
+            }
+
+            toast.success("Mensagem enviada com sucesso!");
+          } else {
+            throw new Error(evolutionData?.error || "Erro ao enviar mensagem");
+          }
+        } catch (evolutionError) {
+          console.error('Erro ao enviar via Evolution API:', evolutionError);
+          toast.error("Erro ao enviar mensagem via WhatsApp");
+          
+          // Remover a mensagem da interface se houve erro
+          setChatMessages(prev => prev.filter(msg => msg.id !== userMessage.id));
+        }
       }
 
       setMessage("");

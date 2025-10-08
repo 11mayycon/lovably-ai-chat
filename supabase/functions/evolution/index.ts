@@ -149,7 +149,7 @@ Deno.serve(async (req: Request) => {
           },
           body: JSON.stringify({
             instanceName: name,
-            webhookUrl: "https://hook.inovapro.cloud/whatsapp",
+            webhookUrl: "https://tcswbkvsatskhaskwnit.supabase.co/functions/v1/webhook-handler",
             integration: "WHATSAPP-BAILEYS",
             qrcode: true,
           }),
@@ -243,6 +243,89 @@ Deno.serve(async (req: Request) => {
 
         const data = JSON.parse(text);
         return new Response(JSON.stringify({ instanceName: name, ...data }), { 
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      case "sendMessage": {
+        const name = (instanceName && String(instanceName).trim()) || "ISA";
+        const { number, message } = body;
+        
+        if (!number || !message) {
+          return new Response(
+            JSON.stringify({ 
+              error: "Parâmetros obrigatórios: number e message",
+              details: "Informe o número do destinatário e a mensagem a ser enviada"
+            }),
+            { 
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
+        }
+
+        console.log("🟢 sendMessage ->", name, "para", number);
+        console.log("📥 Mensagem:", message);
+
+        const response = await evoFetch(`${EVOLUTION_API_URL}/message/sendText/${name}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": EVOLUTION_API_KEY,
+          },
+          body: JSON.stringify({
+            number: number,
+            text: message,
+          }),
+        });
+
+        console.log("📡 Evolution Status:", response.status, response.statusText);
+
+        const text = await response.text();
+        console.log("📜 Corpo da resposta Evolution:", text);
+
+        if (!response.ok) {
+          let errorMessage = "Erro ao enviar mensagem";
+          let errorDetails = text;
+          
+          try {
+            const errorData = JSON.parse(text);
+            if (errorData.response?.message) {
+              const msg = Array.isArray(errorData.response.message) 
+                ? errorData.response.message.join(', ') 
+                : errorData.response.message;
+              errorMessage = "Erro na Evolution API";
+              errorDetails = msg;
+            }
+          } catch (e) {
+            // Keep original text if parsing fails
+          }
+          
+          return new Response(
+            JSON.stringify({
+              error: errorMessage,
+              details: errorDetails,
+              status: response.status,
+              statusText: response.statusText,
+            }),
+            { 
+              status: 500,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
+        }
+
+        const data = JSON.parse(text);
+        console.log("✅ Mensagem enviada com sucesso!");
+        
+        return new Response(JSON.stringify({ 
+          success: true,
+          instanceName: name,
+          number: number,
+          message: message,
+          response: data
+        }), { 
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
