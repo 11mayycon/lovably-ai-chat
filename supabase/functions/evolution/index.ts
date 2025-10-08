@@ -141,6 +141,9 @@ Deno.serve(async (req: Request) => {
         console.log("🟢 createInstance ->", name);
         console.log("📥 Body:", JSON.stringify(redact(body)));
 
+        // URL do webhook aponta para a edge function
+        const webhookUrl = `${SUPABASE_URL}/functions/v1/whatsapp-webhook`;
+        
         const response = await evoFetch(`${EVOLUTION_API_URL}/instance/create`, {
           method: "POST",
           headers: {
@@ -149,7 +152,15 @@ Deno.serve(async (req: Request) => {
           },
           body: JSON.stringify({
             instanceName: name,
-            webhookUrl: "https://hook.inovapro.cloud/whatsapp",
+            webhookUrl: webhookUrl,
+            webhook: {
+              enabled: true,
+              events: [
+                "messages.upsert",
+                "messages.update",
+                "connection.update"
+              ]
+            },
             integration: "WHATSAPP-BAILEYS",
             qrcode: true,
           }),
