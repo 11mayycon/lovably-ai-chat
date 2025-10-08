@@ -197,10 +197,73 @@ const ChatNew = () => {
         }));
 
         setChatMessages(formattedMessages);
+
+        // Se não há mensagens no banco, tentar sincronizar mensagens antigas da Evolution API
+        if (!messages || messages.length === 0) {
+          console.log('📥 Nenhuma mensagem encontrada, sincronizando histórico...');
+          await syncHistoricalMessages(contact);
+        }
       } catch (error) {
         console.error("Erro ao carregar mensagens:", error);
         toast.error("Erro ao carregar histórico de mensagens");
       }
+    }
+  };
+
+  const syncHistoricalMessages = async (contact: any) => {
+    try {
+      // Buscar informações da conexão WhatsApp
+      const { data: connectionData } = await supabase
+        .from('whatsapp_connections')
+        .select('instance_name')
+        .eq('id', contact.attendance.whatsapp_connection_id)
+        .single();
+
+      if (!connectionData?.instance_name) {
+        console.log('⚠️ Instância não encontrada para sincronização');
+        return;
+      }
+
+      console.log(`🔄 Sincronizando mensagens antigas do contato ${contact.phone}...`);
+
+      // Chamar função de sincronização
+      const { data: syncResult, error: syncError } = await supabase.functions.invoke('sync-messages', {
+        body: {
+          instanceName: connectionData.instance_name,
+          contactNumber: contact.phone,
+          attendanceId: contact.id,
+          limit: 50
+        }
+      });
+
+      if (syncError) {
+        console.error('Erro ao sincronizar mensagens:', syncError);
+        return;
+      }
+
+      if (syncResult?.success && syncResult?.processed > 0) {
+        console.log(`✅ ${syncResult.processed} mensagens antigas carregadas`);
+        toast.success(`${syncResult.processed} mensagens antigas carregadas`);
+        
+        // Recarregar mensagens após sincronização
+        const { data: messages } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('attendance_id', contact.id)
+          .order('created_at', { ascending: true });
+
+        if (messages) {
+          const formattedMessages = messages.map((msg: any) => ({
+            id: msg.id,
+            content: msg.content,
+            sender: msg.sender_type === 'client' ? 'user' : 'assistant',
+            timestamp: msg.created_at
+          }));
+          setChatMessages(formattedMessages);
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao sincronizar mensagens antigas:', error);
     }
   };
 

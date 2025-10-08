@@ -1,5 +1,5 @@
-// Sync Messages - Sincroniza mensagens entre Evolution API e Supabase
-// Função auxiliar para buscar mensagens históricas e manter sincronização
+// Sync Messages - Sincroniza mensagens históricas da Evolution API para o Supabase
+// Adaptado para trabalhar com a estrutura de attendances e messages
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -7,6 +7,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 interface SyncRequest {
   instanceName: string;
   contactNumber?: string;
+  attendanceId: string;
   limit?: number;
 }
 
@@ -32,33 +33,37 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
-    const { instanceName, contactNumber, limit = 50 }: SyncRequest = await req.json();
+    const { instanceName, contactNumber, attendanceId, limit = 50 }: SyncRequest = await req.json();
+
+    if (!attendanceId) {
+      throw new Error("attendanceId is required");
+    }
 
     console.log("[sync-messages] Instância:", instanceName);
-    console.log("[sync-messages] Contato:", contactNumber || "todos");
+    console.log("[sync-messages] Contato:", contactNumber);
+    console.log("[sync-messages] Atendimento:", attendanceId);
     console.log("[sync-messages] Limite:", limit);
 
     // Buscar mensagens da Evolution API
-    let evolutionUrl = `${evolutionApiUrl}/chat/findMessages/${instanceName}`;
+    const evolutionUrl = `${evolutionApiUrl}/chat/findMessages/${instanceName}`;
     const params = new URLSearchParams();
     
     if (contactNumber) {
+      // Formatar número no padrão WhatsApp
+      const formattedNumber = contactNumber.replace(/\D/g, '');
       params.append("where", JSON.stringify({
         key: {
-          remoteJid: `${contactNumber}@s.whatsapp.net`
+          remoteJid: `${formattedNumber}@s.whatsapp.net`
         }
       }));
     }
     
     params.append("limit", limit.toString());
     
-    if (params.toString()) {
-      evolutionUrl += `?${params.toString()}`;
-    }
+    const fullUrl = `${evolutionUrl}?${params.toString()}`;
+    console.log("[sync-messages] URL Evolution API:", fullUrl);
 
-    console.log("[sync-messages] Buscando mensagens da Evolution API...");
-    
-    const evolutionResponse = await fetch(evolutionUrl, {
+    const evolutionResponse = await fetch(fullUrl, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -67,6 +72,8 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!evolutionResponse.ok) {
+      const errorText = await evolutionResponse.text();
+      console.error("[sync-messages] Erro na Evolution API:", errorText);
       throw new Error(`Erro na Evolution API: ${evolutionResponse.status} ${evolutionResponse.statusText}`);
     }
 
@@ -76,7 +83,14 @@ Deno.serve(async (req: Request) => {
     let processedCount = 0;
     let skippedCount = 0;
 
-    for (const msg of evolutionMessages) {
+    // Processar mensagens do mais antigo para o mais recente
+    const sortedMessages = evolutionMessages.sort((a: any, b: any) => {
+      const timeA = a.messageTimestamp || 0;
+      const timeB = b.messageTimestamp || 0;
+      return timeA - timeB;
+    });
+
+    for (const msg of sortedMessages) {
       try {
         // Extrair informações da mensagem
         const remoteJid = msg.key?.remoteJid;
@@ -94,78 +108,50 @@ Deno.serve(async (req: Request) => {
           messageText = msg.message.conversation;
         } else if (msg.message?.extendedTextMessage?.text) {
           messageText = msg.message.extendedTextMessage.text;
-        }
-
-        if (!messageText) {
-          skippedCount++;
-          continue;
-        }
-
-        // Extrair número do contato
-        const contactNum = remoteJid.replace("@s.whatsapp.net", "").replace("@g.us", "");
-        const contactName = msg.pushName || contactNum;
-
-        // Verificar/criar contato
-        let contact = await supabase
-          .from("contacts")
-          .select("*")
-          .eq("number", contactNum)
-          .eq("instance_id", instanceName)
-          .maybeSingle();
-
-        if (contact.error) {
-          console.error("[sync-messages] Erro ao buscar contato:", contact.error);
-          continue;
-        }
-
-        if (!contact.data) {
-          const newContact = await supabase
-            .from("contacts")
-            .insert({
-              name: contactName,
-              number: contactNum,
-              instance_id: instanceName,
-              created_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-          if (newContact.error) {
-            console.error("[sync-messages] Erro ao criar contato:", newContact.error);
-            continue;
-          }
-
-          contact.data = newContact.data;
+        } else if (msg.message?.imageMessage?.caption) {
+          messageText = `[Imagem] ${msg.message.imageMessage.caption}`;
+        } else if (msg.message?.videoMessage?.caption) {
+          messageText = `[Vídeo] ${msg.message.videoMessage.caption}`;
+        } else if (msg.message?.documentMessage) {
+          messageText = `[Documento] ${msg.message.documentMessage.fileName || 'Arquivo'}`;
+        } else if (msg.message?.audioMessage) {
+          messageText = '[Áudio]';
+        } else {
+          messageText = '[Mídia ou mensagem especial]';
         }
 
         // Verificar se a mensagem já existe
-        const existingMessage = await supabase
+        const { data: existingMessage } = await supabase
           .from("messages")
           .select("id")
-          .eq("message_id", messageId)
-          .eq("contact_id", contact.data.id)
+          .eq("attendance_id", attendanceId)
+          .eq("content", messageText)
+          .gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()) // Últimos 7 dias
           .maybeSingle();
 
-        if (existingMessage.data) {
+        if (existingMessage) {
           skippedCount++;
           continue;
         }
 
         // Salvar mensagem
-        const messageInsert = await supabase
+        const messageTimestamp = msg.messageTimestamp 
+          ? new Date(msg.messageTimestamp * 1000).toISOString()
+          : new Date().toISOString();
+
+        const { error: messageInsertError } = await supabase
           .from("messages")
           .insert({
-            contact_id: contact.data.id,
-            instance_id: instanceName,
-            message_id: messageId,
+            attendance_id: attendanceId,
             content: messageText,
-            direction: fromMe ? "out" : "in",
-            timestamp: new Date((msg.messageTimestamp || Date.now() / 1000) * 1000).toISOString(),
-            created_at: new Date().toISOString()
+            sender_type: fromMe ? "agent" : "client",
+            sender_id: null,
+            created_at: messageTimestamp
           });
 
-        if (messageInsert.error) {
-          console.error("[sync-messages] Erro ao salvar mensagem:", messageInsert.error);
+        if (messageInsertError) {
+          console.error("[sync-messages] Erro ao salvar mensagem:", messageInsertError);
+          skippedCount++;
           continue;
         }
 
