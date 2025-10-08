@@ -217,7 +217,7 @@ Deno.serve(async (req: Request) => {
         const name = (instanceName && String(instanceName).trim()) || "ISA";
         console.log("🟢 checkStatus ->", name);
         const response = await evoFetch(
-          `${EVOLUTION_API_URL}/instance/status/${name}`,
+          `${EVOLUTION_API_URL}/instance/connectionState/${name}`,
           { headers: { "apikey": EVOLUTION_API_KEY } }
         );
 
