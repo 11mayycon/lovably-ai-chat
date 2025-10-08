@@ -1,13 +1,4 @@
-// @deno-types="https://esm.sh/@supabase/supabase-js@2/dist/module/index.d.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-// @deno-types="https://esm.sh/groq-sdk@0.3.3/index.d.ts"
-import Groq from "https://esm.sh/groq-sdk@0.3.3";
 import { corsHeaders } from "../_shared/cors.ts";
-
-// Initialize Groq client with the API key from environment variables
-const groq = new Groq({
-  apiKey: Deno.env.get("GROQ_API_KEY"),
-});
 
 // System prompt that defines the AI's persona and role
 const SYSTEM_PROMPT = `
@@ -34,6 +25,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY não configurada");
+    }
+
     // Get the message and context from the request body
     const { message, contextChat } = await req.json();
 
@@ -41,8 +37,8 @@ Deno.serve(async (req: Request) => {
       throw new Error("A mensagem é obrigatória e deve ser uma string.");
     }
 
-    // Prepare messages for Groq API
-    const groqMessages: Array<{ role: string; content: string }> = [
+    // Prepare messages for Lovable AI Gateway
+    const messages: Array<{ role: string; content: string }> = [
       { role: "system", content: SYSTEM_PROMPT }
     ];
 
@@ -50,7 +46,7 @@ Deno.serve(async (req: Request) => {
     if (contextChat && Array.isArray(contextChat)) {
       contextChat.forEach((msg: any) => {
         if (msg.role && msg.content) {
-          groqMessages.push({
+          messages.push({
             role: msg.role === "user" ? "user" : "assistant",
             content: msg.content
           });
@@ -59,22 +55,41 @@ Deno.serve(async (req: Request) => {
     }
 
     // Add the current user message
-    groqMessages.push({
+    messages.push({
       role: "user",
       content: message
     });
 
-    // Call the Groq API to get the AI's response
-    const chatCompletion = await groq.chat.completions.create({
-      messages: groqMessages,
-      model: Deno.env.get("GROQ_MODEL") || "llama3-8b-8192",
-      temperature: 0.7,
-      max_tokens: 1024,
-      top_p: 1,
-      stream: false,
+    // Call the Lovable AI Gateway
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages,
+        temperature: 0.7,
+        max_tokens: 1024,
+      }),
     });
 
-    const aiResponse = chatCompletion.choices[0]?.message?.content;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Lovable AI Gateway error:", response.status, errorText);
+      
+      if (response.status === 429) {
+        throw new Error("Limite de requisições excedido. Por favor, tente novamente em alguns instantes.");
+      }
+      if (response.status === 402) {
+        throw new Error("Créditos insuficientes. Por favor, adicione créditos à sua conta Lovable.");
+      }
+      throw new Error("Erro ao comunicar com a IA. Tente novamente.");
+    }
+
+    const data = await response.json();
+    const aiResponse = data.choices?.[0]?.message?.content;
 
     if (!aiResponse) {
       throw new Error("A IA não conseguiu gerar uma resposta.");
@@ -95,12 +110,12 @@ Deno.serve(async (req: Request) => {
     // Return a more user-friendly error message
     let errorMessage = "Erro interno do servidor. Tente novamente.";
     
-    if ((error as Error).message.includes("API key")) {
-      errorMessage = "Chave da API Groq não configurada. Entre em contato com o administrador.";
-    } else if ((error as Error).message.includes("rate limit")) {
-      errorMessage = "Muitas solicitações. Aguarde alguns segundos e tente novamente.";
-    } else if ((error as Error).message.includes("model")) {
-      errorMessage = "Modelo de IA indisponível. Tente novamente em alguns instantes.";
+    if ((error as Error).message.includes("Limite de requisições")) {
+      errorMessage = (error as Error).message;
+    } else if ((error as Error).message.includes("Créditos insuficientes")) {
+      errorMessage = (error as Error).message;
+    } else if ((error as Error).message.includes("comunicar com a IA")) {
+      errorMessage = (error as Error).message;
     }
     
     return new Response(JSON.stringify({ 
