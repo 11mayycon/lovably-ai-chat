@@ -227,23 +227,6 @@ const ChatNew = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-purple-900 text-white overflow-hidden">
-      {/* Custom Scrollbar Styles */}
-      <style jsx global>{`
-        ::-webkit-scrollbar {
-          width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-          background: rgba(0, 0, 0, 0.1);
-        }
-        ::-webkit-scrollbar-thumb {
-          background: linear-gradient(to bottom, #7c3aed, #ec4899);
-          border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: linear-gradient(to bottom, #8b5cf6, #f472b6);
-        }
-      `}</style>
-
       <div className="flex h-screen">
         {/* Sidebar de Contatos */}
         <motion.div
