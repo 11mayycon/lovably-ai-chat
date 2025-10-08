@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { User, Session } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { supabasePublic } from "@/lib/supabase-public-client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -24,7 +24,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = supabasePublic.auth.onAuthStateChange(
       async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
@@ -32,7 +32,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (session?.user) {
           // Fetch user roles
           setTimeout(async () => {
-            const { data: rolesData } = await supabase
+            const { data: rolesData } = await supabasePublic
               .from("user_roles")
               .select("role")
               .eq("user_id", session.user.id);
@@ -58,12 +58,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     );
 
     // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabasePublic.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        supabase
+        supabasePublic
           .from("user_roles")
           .select("role")
           .eq("user_id", session.user.id)
@@ -92,7 +92,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabasePublic.auth.signInWithPassword({
       email,
       password,
     });
@@ -102,14 +102,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     // Fetch all user roles (user may have multiple roles)
-    const { data: rolesData } = await supabase
+    const { data: rolesData } = await supabasePublic
       .from("user_roles")
       .select("role")
       .eq("user_id", data.user.id);
 
     if (!rolesData || rolesData.length === 0) {
       toast.error("Usuário sem permissões atribuídas");
-      await supabase.auth.signOut();
+      await supabasePublic.auth.signOut();
       return;
     }
 
@@ -125,7 +125,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     if (!role) {
       toast.error("Usuário sem permissões válidas");
-      await supabase.auth.signOut();
+      await supabasePublic.auth.signOut();
       return;
     }
 
@@ -140,7 +140,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await supabasePublic.auth.signOut();
     setUserRole(null);
     navigate("/");
   };

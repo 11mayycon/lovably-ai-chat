@@ -159,10 +159,21 @@ Deno.serve(async (req: Request) => {
       }
 
       existingAttendance = newAttendance;
-      console.log("✅ Novo atendimento criado:", existingAttendance.client_name);
+      console.log("✅ Novo atendimento criado:", existingAttendance?.client_name);
     }
 
     // Salvar a mensagem
+    if (!existingAttendance) {
+      console.error("❌ Atendimento não encontrado");
+      return new Response(
+        JSON.stringify({ error: "Atendimento não encontrado" }),
+        { 
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
     const { error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -189,7 +200,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ 
         success: true, 
         message: "Mensagem processada com sucesso",
-        client: existingAttendance.client_name,
+        client: existingAttendance?.client_name,
         text: messageText.substring(0, 100)
       }),
       { 
