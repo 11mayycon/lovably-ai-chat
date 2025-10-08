@@ -79,8 +79,10 @@ const Chat = () => {
         .eq('room_id', roomId);
 
       if (error) throw error;
-      // Filter: Show only non-bot members except the current user
-      setRoomMembers(data?.filter(m => m.user_id !== supportUser.id && !(m as any).is_bot) || []);
+      // Always show AI assistant entry + human members (excluding current user)
+      const filtered = (data || []).filter((m) => m.user_id !== supportUser.id);
+      const botMember = { user_id: 'ai-bot', full_name: 'Assistente IA', is_bot: true } as any;
+      setRoomMembers([botMember, ...filtered]);
     } catch (error) {
       console.error('Error loading room members:', error);
     }
