@@ -23,11 +23,24 @@ export default function WhatsAppConnection() {
   // Polling para verificar status da instância quando está conectando
   useEffect(() => {
     let interval: NodeJS.Timeout;
+    let errorCount = 0;
     
     if (instance?.status === 'connecting') {
       interval = setInterval(async () => {
-        await checkInstanceStatus();
-      }, 3000); // Verifica a cada 3 segundos
+        const result = await checkInstanceStatus();
+        
+        // Se receber muitos erros consecutivos, para o polling
+        if (!result) {
+          errorCount++;
+          if (errorCount >= 5) {
+            clearInterval(interval);
+            toast.error('Não foi possível verificar o status. Tente gerar um novo QR Code.');
+            setInstance(null);
+          }
+        } else {
+          errorCount = 0;
+        }
+      }, 2000); // Verifica a cada 2 segundos (mais rápido)
     }
 
     return () => {
@@ -57,7 +70,7 @@ export default function WhatsAppConnection() {
   };
 
   const checkInstanceStatus = async () => {
-    if (!instance?.instanceName) return;
+    if (!instance?.instanceName) return false;
 
     try {
       setIsCheckingStatus(true);
@@ -70,10 +83,13 @@ export default function WhatsAppConnection() {
         toast.success('WhatsApp conectado com sucesso! Sincronizando contatos...');
 
         await loadContacts();
+        return true;
       }
+      
+      return result.success;
     } catch (error) {
       console.error('Erro ao verificar status:', error);
-      toast.error('Erro ao verificar status da instância');
+      return false;
     } finally {
       setIsCheckingStatus(false);
     }
