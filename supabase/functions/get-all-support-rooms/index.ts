@@ -87,8 +87,8 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Erro na função get-all-support-rooms:', error.message);
-    return new Response(JSON.stringify({ error: `Falha na função: ${error.message}` }), {
+    console.error('Erro na função get-all-support-rooms:', (error as Error).message);
+    return new Response(JSON.stringify({ error: `Falha na função: ${(error as Error).message}` }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });

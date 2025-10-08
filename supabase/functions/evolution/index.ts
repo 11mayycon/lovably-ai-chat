@@ -24,9 +24,9 @@ Deno.serve(async (req: Request) => {
     const { action, instanceName } = body;
 
     // @ts-ignore
-    const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL');
+    const EVOLUTION_API_URL = Deno.env.get('EVO_BASE_URL');
     // @ts-ignore
-    const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY');
+    const EVOLUTION_API_KEY = Deno.env.get('EVO_API_KEY');
     // @ts-ignore
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     // @ts-ignore
@@ -41,9 +41,12 @@ Deno.serve(async (req: Request) => {
     console.log("🔹 Tem chave de API?:", EVOLUTION_API_KEY ? "✅ Sim" : "❌ Não");
 
     if (!EVOLUTION_API_URL) {
-      console.error("❌ ERRO: EVOLUTION_API_URL não configurado!");
+      console.error("❌ ERRO: EVO_BASE_URL não configurado!");
       return new Response(
-        JSON.stringify({ error: "EVOLUTION_API_URL não configurado" }),
+        JSON.stringify({ 
+          error: "Servidor Evolution API não configurado",
+          details: "Entre em contato com o administrador para configurar a integração com Evolution API"
+        }),
         { 
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -52,9 +55,12 @@ Deno.serve(async (req: Request) => {
     }
 
     if (!EVOLUTION_API_KEY) {
-      console.error("❌ ERRO: EVOLUTION_API_KEY não configurado!");
+      console.error("❌ ERRO: EVO_API_KEY não configurado!");
       return new Response(
-        JSON.stringify({ error: "EVOLUTION_API_KEY não configurado" }),
+        JSON.stringify({ 
+          error: "Chave da Evolution API não configurada",
+          details: "Entre em contato com o administrador para configurar a integração com Evolution API"
+        }),
         { 
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -154,15 +160,39 @@ Deno.serve(async (req: Request) => {
         console.log("📜 Corpo da resposta Evolution:", text);
 
         if (!response.ok) {
+          // Parse error message if possible
+          let errorMessage = "Erro ao criar instância no WhatsApp";
+          let errorDetails = text;
+          
+          try {
+            const errorData = JSON.parse(text);
+            if (errorData.response?.message) {
+              const msg = Array.isArray(errorData.response.message) 
+                ? errorData.response.message.join(', ') 
+                : errorData.response.message;
+              
+              // Check for specific error
+              if (msg.includes('evolution_api.Instance') && msg.includes('does not exist')) {
+                errorMessage = "Banco de dados da Evolution API não configurado";
+                errorDetails = "A Evolution API não está configurada corretamente. Verifique se o banco de dados foi inicializado e as tabelas foram criadas.";
+              } else {
+                errorMessage = "Erro na Evolution API";
+                errorDetails = msg;
+              }
+            }
+          } catch (e) {
+            // Keep original text if parsing fails
+          }
+          
           return new Response(
             JSON.stringify({
-              error: "A Evolution API retornou erro",
+              error: errorMessage,
+              details: errorDetails,
               status: response.status,
               statusText: response.statusText,
-              body: text,
             }),
             { 
-              status: response.status,
+              status: 500,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             }
           );
