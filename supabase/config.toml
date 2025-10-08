@@ -1,0 +1,25 @@
+project_id = "grlyhylqbekhrmfwgyme"
+
+[functions.create-first-admin]
+verify_jwt = false
+
+[functions.evolution]
+verify_jwt = false
+
+[functions.support-login]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.create-checkout-session]
+verify_jwt = true
+
+[functions.create-admin]
+verify_jwt = true
+
+[functions.delete-admin]
+verify_jwt = true
+
+[functions.ai-chat]
+verify_jwt = true
