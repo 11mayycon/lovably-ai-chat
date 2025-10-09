@@ -7,7 +7,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bot, User, Send, ArrowLeft, BrainCircuit, Loader2, MessageCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { databaseClient } from "@/lib/database-client";
+import { whatsappService } from "@/lib/whatsapp-service";
 
 const Chat = () => {
   const navigate = useNavigate();
@@ -22,57 +23,11 @@ const Chat = () => {
 
   useEffect(() => {
     loadUserData();
-
-    // Garantir que o webhook esteja configurado
-    (async () => {
-      const { data } = await supabase.functions.invoke('get-connected-whatsapp-instance');
-      const instanceName = data?.instance?.instance_name;
-      if (instanceName) {
-        await supabase.functions.invoke('set-whatsapp-webhook', {
-          body: { instanceName }
-        });
-      }
-    })();
   }, []);
 
   useEffect(() => {
     if (selectedContact) {
       loadMessages();
-      
-      // Configurar listener para mensagens em tempo real (apenas para contatos do WhatsApp)
-      if (selectedContact.id !== "groq-ai") {
-        const channel = supabase
-          .channel('messages')
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'messages',
-              filter: `contact_id=eq.${selectedContact.id}`
-            },
-            (payload) => {
-              console.log('Nova mensagem recebida:', payload);
-              
-              if (payload.eventType === 'INSERT') {
-                const newMessage = {
-                  id: payload.new.id,
-                  content: payload.new.content,
-                  sender_type: payload.new.direction === 'in' ? 'customer' : 'agent',
-                  created_at: payload.new.created_at
-                };
-                
-                setChatMessages(prev => [...prev, newMessage]);
-              }
-            }
-          )
-          .subscribe();
-
-        // Cleanup do listener quando o contato mudar ou componente desmontar
-        return () => {
-          supabase.removeChannel(channel);
-        };
-      }
     }
   }, [selectedContact]);
 
@@ -110,18 +65,9 @@ const Chat = () => {
 
   const loadWhatsAppContacts = async () => {
     try {
-      // Buscar atendimentos ativos do banco de dados
-      const { data: attendances, error: attendancesError } = await supabase
-        .from('attendances')
-        .select('*')
-        .in('status', ['active', 'waiting'])
-        .order('created_at', { ascending: false });
-
-      if (attendancesError) {
-        console.error("Erro ao carregar atendimentos:", attendancesError);
-        throw attendancesError;
-      }
-
+      // Tentar carregar contatos do WhatsApp via API local
+      const whatsappContactsData = await databaseClient.getWhatsAppContacts();
+      
       // Adicionar contato fixo do INOVAPRO AI
       const inovaproContact = {
         id: "groq-ai",
@@ -130,25 +76,15 @@ const Chat = () => {
         profilePicUrl: null,
         isGroup: false,
         isAI: true,
-        lastSeen: null
+        lastSeen: null,
+        isWhatsApp: false
       };
 
-      // Converter atendimentos em contatos
-      const contacts = (attendances || []).map((att: any) => ({
-        id: att.id,
-        name: att.client_name,
-        phone: att.client_phone,
-        profilePicUrl: null,
-        isGroup: false,
-        isAI: false,
-        lastSeen: att.updated_at,
-        status: att.status,
-        attendance: att
-      }));
-
-      setWhatsappContacts([inovaproContact, ...contacts]);
+      // Combinar contatos do WhatsApp com o contato AI
+      const allContacts = [inovaproContact, ...whatsappContactsData];
+      setWhatsappContacts(allContacts);
     } catch (error) {
-      console.error("Erro ao carregar contatos do WhatsApp:", error);
+      console.error("Erro ao carregar contatos:", error);
       // Em caso de erro, adicionar apenas o contato do INOVAPRO AI
       const inovaproContact = {
         id: "groq-ai",
@@ -157,7 +93,8 @@ const Chat = () => {
         profilePicUrl: null,
         isGroup: false,
         isAI: true,
-        lastSeen: null
+        lastSeen: null,
+        isWhatsApp: false
       };
       setWhatsappContacts([inovaproContact]);
     }
@@ -177,21 +114,16 @@ const Chat = () => {
         return;
       }
 
-      // Buscar mensagens via função (bypass RLS)
-      const supportData = sessionStorage.getItem('support_user');
-      const support = supportData ? JSON.parse(supportData) : null;
+      // Para contatos do WhatsApp, carregar mensagens via API local
+      if (selectedContact.isWhatsApp) {
+        const messages = await databaseClient.getWhatsAppMessages(selectedContact.id);
+        setChatMessages(messages);
+        return;
+      }
 
-      const { data, error } = await supabase.functions.invoke('get-attendance-messages', {
-        body: {
-          attendance_id: selectedContact.id,
-          support_user_id: support?.id
-        }
-      });
-
-      if (error) throw error;
-
-      const msgs = data?.messages || [];
-      setChatMessages(msgs);
+      // Para atendimentos tradicionais, carregar mensagens via API local
+      const messages = await databaseClient.getAttendanceMessages(selectedContact.id);
+      setChatMessages(messages);
     } catch (error) {
       console.error('Error loading messages:', error);
       setChatMessages([]);
@@ -203,10 +135,6 @@ const Chat = () => {
     setIsSending(true);
     
     try {
-      const supportData = sessionStorage.getItem('support_user');
-      if (!supportData) return;
-      const support = JSON.parse(supportData);
-
       // Adicionar mensagem do agente visualmente
       const userMessage = {
         id: Date.now().toString(),
@@ -216,49 +144,56 @@ const Chat = () => {
       };
       setChatMessages(prev => [...prev, userMessage]);
 
+      // Para o Groq AI - usar API local
       if (selectedContact.id === "groq-ai") {
-        const { data, error } = await supabase.functions.invoke("ai-direct-chat", {
-          body: { message },
-        });
-        if (error) throw error;
-        if (data?.reply) {
+        try {
+          const aiResponse = await databaseClient.sendAIMessage(message);
           const aiMessage = {
             id: (Date.now() + 1).toString(),
-            content: data.reply,
+            content: aiResponse.content || 'Obrigado pela sua mensagem! Estou aqui para ajudar com qualquer dúvida sobre atendimento ao cliente.',
+            sender_type: 'ai',
+            created_at: new Date().toISOString()
+          };
+          setChatMessages(prev => [...prev, aiMessage]);
+        } catch (error) {
+          // Fallback para resposta simulada
+          const aiMessage = {
+            id: (Date.now() + 1).toString(),
+            content: 'Obrigado pela sua mensagem! Estou aqui para ajudar com qualquer dúvida sobre atendimento ao cliente.',
             sender_type: 'ai',
             created_at: new Date().toISOString()
           };
           setChatMessages(prev => [...prev, aiMessage]);
         }
-      } else {
-        // 1) Salvar mensagem no banco via função segura
-        const { error: sendError } = await supabase.functions.invoke('send-agent-message', {
-          body: {
-            attendance_id: selectedContact.id,
-            support_user_id: support.id,
-            content: message
-          }
-        });
-        if (sendError) throw sendError;
-
-        // 2) Enviar via WhatsApp
-        const instanceName = selectedContact.attendance?.whatsapp_connections?.instance_name;
-        if (instanceName) {
-          const { error: wppError } = await supabase.functions.invoke('send-whatsapp-message', {
-            body: {
-              phoneNumber: selectedContact.phone,
-              message,
-              instanceName
-            }
-          });
-          if (wppError) console.error('Erro ao enviar via WhatsApp:', wppError);
-        }
-
-        // 3) Recarregar mensagens
-        await loadMessages();
+        
+        setMessage('');
+        return;
       }
 
+      // Para contatos do WhatsApp
+      if (selectedContact.isWhatsApp) {
+        // Enviar mensagem via Evolution API
+        const result = await whatsappService.sendMessage(
+          selectedContact.instanceName,
+          selectedContact.phone,
+          message
+        );
+
+        if (result.success) {
+          // Também salvar no banco local
+          await databaseClient.sendWhatsAppMessage(selectedContact.id, message);
+          setMessage('');
+          toast.success('Mensagem enviada via WhatsApp');
+        } else {
+          throw new Error(result.error || 'Falha ao enviar mensagem via WhatsApp');
+        }
+        return;
+      }
+
+      // Para atendimentos tradicionais
+      await databaseClient.sendAttendanceMessage(selectedContact.id, message);
       setMessage("");
+      toast.success("Mensagem enviada");
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error("Erro ao enviar mensagem");
@@ -320,14 +255,30 @@ const Chat = () => {
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                       {contact.isAI ? (
                         <BrainCircuit className="w-5 h-5 text-primary" />
+                      ) : contact.isWhatsApp ? (
+                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                          <MessageCircle className="w-3 h-3 text-white" />
+                        </div>
                       ) : (
                         <MessageCircle className="w-5 h-5 text-primary" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="font-semibold text-sm block truncate">{contact.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm block truncate">{contact.name}</span>
+                        {contact.isWhatsApp && (
+                          <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                            WhatsApp
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground truncate">
                         {contact.isAI ? 'Assistente Virtual' : contact.phone}
+                        {contact.isWhatsApp && contact.instanceName && (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            • {contact.instanceName}
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>

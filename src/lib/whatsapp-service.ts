@@ -1,20 +1,9 @@
 import QRCode from 'qrcode';
 import { instanceDb, contactDb, messageDb } from './browser-database';
 
-// Supabase Edge Functions (prod e dev)
-const SUPABASE_URL: string | undefined = (import.meta as any).env?.VITE_SUPABASE_URL;
-const DERIVED_FUNCTIONS_BASE = (() => {
-  if (!SUPABASE_URL) return undefined;
-  try {
-    const host = new URL(SUPABASE_URL).hostname; // ex: <ref>.supabase.co
-    const ref = host.split('.')[0];
-    return `https://${ref}.functions.supabase.co`;
-  } catch {
-    return undefined;
-  }
-})();
-// Em produção usamos "https://<ref>.functions.supabase.co"; em dev, fallback para CLI local
-const FUNCTIONS_URL = (import.meta as any).env?.VITE_SUPABASE_FUNCTIONS_URL || DERIVED_FUNCTIONS_BASE || 'http://localhost:54321/functions/v1';
+// Evolution API externa
+const EVOLUTION_API_URL = 'https://evo.inovapro.cloud';
+const EVOLUTION_API_KEY = '429683C4C977415CAAFCCE10F7D57E11'; // Chave da Evolution API
 
 export interface WhatsAppInstance {
   instanceName: string;
@@ -67,27 +56,37 @@ class WhatsAppService {
     }
   }
 
-  private async callEvolution<T = any>(action: string, payload?: Record<string, any>): Promise<{ success: boolean; status?: number; data?: T; error?: string; body?: any }> {
+  private async callEvolutionAPI<T = any>(endpoint: string, method: 'GET' | 'POST' | 'DELETE' = 'GET', payload?: Record<string, any>): Promise<{ success: boolean; status?: number; data?: T; error?: string; body?: any }> {
     try {
-      const res = await fetch(`${FUNCTIONS_URL}/evolution`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, ...(payload || {}) })
-      });
+      const url = `${EVOLUTION_API_URL}${endpoint}`;
+      const options: RequestInit = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': EVOLUTION_API_KEY
+        }
+      };
+
+      if (payload && (method === 'POST' || method === 'DELETE')) {
+        options.body = JSON.stringify(payload);
+      }
+
+      console.log(`📡 Chamando Evolution API: ${method} ${url}`);
+      const res = await fetch(url, options);
 
       const text = await res.text();
       let json: any = null;
       try { json = text ? JSON.parse(text) : null; } catch { json = null; }
 
-      console.log('📡 Edge Function status:', res.status, res.statusText);
+      console.log('📡 Evolution API status:', res.status, res.statusText);
       if (!res.ok) {
-        const message = json?.error || json?.message || `Falha na função (status ${res.status})`;
+        const message = json?.error || json?.message || `Falha na Evolution API (status ${res.status})`;
         return { success: false, status: res.status, error: message, body: json || text };
       }
 
       return { success: true, status: res.status, data: json };
     } catch (err: any) {
-      console.error('❌ Erro na chamada da Edge Function:', err);
+      console.error('❌ Erro na chamada da Evolution API:', err);
       return { success: false, error: err.message || 'Erro desconhecido' };
     }
   }
@@ -117,7 +116,7 @@ class WhatsAppService {
       const finalInstanceName = instanceName || `isa_admin_${Date.now().toString(36)}`;
       
       console.log('🟢 Criando instância pela Edge Function...');
-      const response = await this.callEvolution('createInstance', { instanceName: finalInstanceName });
+      const response = await this.callEvolutionAPI('/instance/create', 'POST', { instanceName: finalInstanceName });
 
       if (response.success && response.data) {
         const data = response.data as any;
@@ -180,7 +179,7 @@ class WhatsAppService {
   async checkInstanceStatus(instanceName: string): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       console.log('🟢 Verificando status via Edge Function:', instanceName);
-      const response = await this.callEvolution('checkStatus', { instanceName });
+      const response = await this.callEvolutionAPI(`/instance/connectionState/${instanceName}`, 'GET');
 
       if (response.success && response.data) {
         const statusData = response.data as any;
@@ -219,7 +218,7 @@ class WhatsAppService {
   async disconnectInstance(instanceName: string): Promise<{ success: boolean; error?: string }> {
     try {
       console.log('🔴 Desconectando instância via Edge Function:', instanceName);
-      const response = await this.callEvolution('deleteInstance', { instanceName });
+      const response = await this.callEvolutionAPI(`/instance/delete/${instanceName}`, 'DELETE');
 
       if (response.success) {
         // Atualizar no banco
@@ -250,6 +249,39 @@ class WhatsAppService {
       }
     }
     return null;
+  }
+
+  // Enviar mensagem
+  async sendMessage(instanceName: string, number: string, message: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      console.log(`📤 Enviando mensagem via ${instanceName} para ${number}`);
+      
+      const payload = {
+        number: number.includes('@') ? number : `${number}@s.whatsapp.net`,
+        options: {
+          delay: 1200,
+          presence: 'composing'
+        },
+        textMessage: {
+          text: message
+        }
+      };
+
+      const result = await this.callEvolutionAPI(`/message/sendText/${instanceName}`, 'POST', payload);
+      
+      if (result.success) {
+        console.log('✅ Mensagem enviada com sucesso');
+        return { success: true, data: result.data };
+      }
+
+      return { success: false, error: result.error || 'Falha ao enviar mensagem' };
+    } catch (error: any) {
+      console.error('❌ Erro ao enviar mensagem:', error);
+      return {
+        success: false,
+        error: error.message || 'Erro desconhecido'
+      };
+    }
   }
 
   // Buscar instância por nome
@@ -284,7 +316,7 @@ class WhatsAppService {
     try {
       console.log(`Sincronizando contatos para instância: ${instanceName}`);
       
-      const result = await this.callEvolution('getContacts', { instanceName });
+      const result = await this.callEvolutionAPI(`/chat/findContacts/${instanceName}`, 'GET');
       
       if (result.success && result.data) {
         const instance = await instanceDb.findByName(instanceName);
