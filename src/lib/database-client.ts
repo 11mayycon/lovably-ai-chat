@@ -13,12 +13,16 @@ class DatabaseClient {
   // Método genérico para fazer requisições
   async request(method: 'GET' | 'POST' | 'PUT' | 'DELETE', endpoint: string, data?: any) {
     try {
+      // Buscar token do localStorage
+      const token = localStorage.getItem('token');
+      
       const response = await axios({
         method,
         url: `${this.baseURL}${endpoint}`,
         data,
         headers: {
           'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
         },
       });
       return response.data;

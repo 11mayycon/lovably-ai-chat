@@ -1,9 +1,8 @@
 import QRCode from 'qrcode';
 import { instanceDb, contactDb, messageDb } from './browser-database';
 
-// Evolution API externa
-const EVOLUTION_API_URL = 'https://evo.inovapro.cloud';
-const EVOLUTION_API_KEY = '429683C4C977415CAAFCCE10F7D57E11'; // Chave da Evolution API
+// Backend API local
+const API_BASE_URL = 'http://localhost:3001/api';
 
 export interface WhatsAppInstance {
   instanceName: string;
@@ -56,14 +55,15 @@ class WhatsAppService {
     }
   }
 
-  private async callEvolutionAPI<T = any>(endpoint: string, method: 'GET' | 'POST' | 'DELETE' = 'GET', payload?: Record<string, any>): Promise<{ success: boolean; status?: number; data?: T; error?: string; body?: any }> {
+  private async callBackendAPI<T = any>(endpoint: string, method: 'GET' | 'POST' | 'DELETE' = 'GET', payload?: Record<string, any>): Promise<{ success: boolean; status?: number; data?: T; error?: string; body?: any }> {
     try {
-      const url = `${EVOLUTION_API_URL}${endpoint}`;
+      const token = localStorage.getItem('token');
+      const url = `${API_BASE_URL}${endpoint}`;
       const options: RequestInit = {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'apikey': EVOLUTION_API_KEY
+          ...(token && { 'Authorization': `Bearer ${token}` })
         }
       };
 
@@ -71,22 +71,22 @@ class WhatsAppService {
         options.body = JSON.stringify(payload);
       }
 
-      console.log(`📡 Chamando Evolution API: ${method} ${url}`);
+      console.log(`📡 Chamando Backend API: ${method} ${url}`);
       const res = await fetch(url, options);
 
       const text = await res.text();
       let json: any = null;
       try { json = text ? JSON.parse(text) : null; } catch { json = null; }
 
-      console.log('📡 Evolution API status:', res.status, res.statusText);
+      console.log('📡 Backend API status:', res.status, res.statusText);
       if (!res.ok) {
-        const message = json?.error || json?.message || `Falha na Evolution API (status ${res.status})`;
+        const message = json?.error || json?.message || `Falha na Backend API (status ${res.status})`;
         return { success: false, status: res.status, error: message, body: json || text };
       }
 
       return { success: true, status: res.status, data: json };
     } catch (err: any) {
-      console.error('❌ Erro na chamada da Evolution API:', err);
+      console.error('❌ Erro na chamada da Backend API:', err);
       return { success: false, error: err.message || 'Erro desconhecido' };
     }
   }
@@ -110,13 +110,13 @@ class WhatsAppService {
     }
   }
 
-  // Criar instância via Edge Function (Evolution API)
+  // Criar instância via Backend
   async createInstance(instanceName?: string): Promise<{ success: boolean; status?: number; data?: any; error?: string }> {
     try {
       const finalInstanceName = instanceName || `isa_admin_${Date.now().toString(36)}`;
       
-      console.log('🟢 Criando instância pela Edge Function...');
-      const response = await this.callEvolutionAPI('/instance/create', 'POST', { instanceName: finalInstanceName });
+      console.log('🟢 Criando instância pelo Backend...');
+      const response = await this.callBackendAPI('/whatsapp/create-instance', 'POST', { instanceName: finalInstanceName });
 
       if (response.success && response.data) {
         const data = response.data as any;
@@ -175,11 +175,11 @@ class WhatsAppService {
     }
   }
 
-  // Verificar status da instância via Edge Function
+  // Verificar status da instância via Backend
   async checkInstanceStatus(instanceName: string): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-      console.log('🟢 Verificando status via Edge Function:', instanceName);
-      const response = await this.callEvolutionAPI(`/instance/connectionState/${instanceName}`, 'GET');
+      console.log('🟢 Verificando status via Backend:', instanceName);
+      const response = await this.callBackendAPI(`/whatsapp/instance-status/${instanceName}`, 'GET');
 
       if (response.success && response.data) {
         const statusData = response.data as any;
@@ -214,11 +214,11 @@ class WhatsAppService {
     }
   }
 
-  // Desconectar instância via Edge Function
+  // Desconectar instância via Backend
   async disconnectInstance(instanceName: string): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log('🔴 Desconectando instância via Edge Function:', instanceName);
-      const response = await this.callEvolutionAPI(`/instance/delete/${instanceName}`, 'DELETE');
+      console.log('🔴 Desconectando instância via Backend:', instanceName);
+      const response = await this.callBackendAPI(`/whatsapp/instance/${instanceName}`, 'DELETE');
 
       if (response.success) {
         // Atualizar no banco
@@ -267,7 +267,7 @@ class WhatsAppService {
         }
       };
 
-      const result = await this.callEvolutionAPI(`/message/sendText/${instanceName}`, 'POST', payload);
+      const result = await this.callBackendAPI(`/whatsapp/send-message`, 'POST', { ...payload, instanceName });
       
       if (result.success) {
         console.log('✅ Mensagem enviada com sucesso');
@@ -316,7 +316,7 @@ class WhatsAppService {
     try {
       console.log(`Sincronizando contatos para instância: ${instanceName}`);
       
-      const result = await this.callEvolutionAPI(`/chat/findContacts/${instanceName}`, 'GET');
+      const result = await this.callBackendAPI(`/whatsapp/contacts`, 'POST', { instanceName });
       
       if (result.success && result.data) {
         const instance = await instanceDb.findByName(instanceName);
