@@ -9,10 +9,36 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { instanceName } = await req.json()
+    let body;
+    try {
+      const text = await req.text()
+      body = text ? JSON.parse(text) : {}
+    } catch (parseError) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Body da requisição inválido' 
+        }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    const { instanceName } = body
 
     if (!instanceName) {
-      throw new Error('instanceName é obrigatório')
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'instanceName é obrigatório' 
+        }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
     }
 
     const EVO_BASE_URL = Deno.env.get('EVO_BASE_URL')
