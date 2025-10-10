@@ -63,6 +63,8 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         instanceName: instanceName,
+        integration: 'WHATSAPP-BAILEYS',
+        qrcode: true,
         token: EVO_API_KEY,
       }),
     })
