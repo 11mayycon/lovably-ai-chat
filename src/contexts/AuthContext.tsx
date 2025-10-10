@@ -73,19 +73,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (error) throw error;
     if (!data.user) throw new Error("Erro ao fazer login");
 
-    await fetchUserRole(data.user.id);
-
-    // Navigate based on role
-    const { data: roleData } = await supabase
+    // Fetch user role
+    const { data: roleData, error: roleError } = await supabase
       .from('user_roles')
       .select('role')
       .eq('user_id', data.user.id)
       .single();
 
+    if (roleError) {
+      console.error('Error fetching role:', roleError);
+      throw new Error("Erro ao buscar permissões do usuário");
+    }
+
+    // Update state
+    setUserRole(roleData.role as "admin" | "support" | "super_admin");
+
+    // Navigate based on role
     if (roleData?.role === "admin" || roleData?.role === "super_admin") {
-      navigate("/admin/dashboard");
+      navigate("/admin/dashboard", { replace: true });
     } else if (roleData?.role === "support") {
-      navigate("/support/select-room");
+      navigate("/support/select-room", { replace: true });
+    } else {
+      throw new Error("Usuário sem permissões adequadas");
     }
   };
 
