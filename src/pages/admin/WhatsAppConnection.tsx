@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { databaseClient } from '../../lib/database-client';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface WhatsAppConnection {
@@ -17,6 +17,8 @@ const WhatsAppConnection: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [showQrCode, setShowQrCode] = useState(false);
+  const [currentInstance, setCurrentInstance] = useState<string | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
 
   useEffect(() => {
     loadConnections();
@@ -25,10 +27,13 @@ const WhatsAppConnection: React.FC = () => {
   const loadConnections = async () => {
     try {
       setLoading(true);
-      const response = await databaseClient.getWhatsAppContacts();
-      if (response.success) {
-        setConnections(response.data || []);
-      }
+      const { data, error } = await supabase
+        .from('whatsapp_connections')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setConnections(data || []);
     } catch (error) {
       console.error('Erro ao carregar conexões:', error);
       setError('Erro ao carregar conexões WhatsApp');
@@ -46,6 +51,39 @@ const WhatsAppConnection: React.FC = () => {
     return username.replace(/[^a-zA-Z]/g, '').toLowerCase();
   };
 
+  // Polling para verificar status da conexão
+  const startStatusPolling = async (instanceName: string) => {
+    setIsPolling(true);
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('check-whatsapp-status', {
+          body: { instanceName }
+        });
+
+        if (error) {
+          console.error('Erro ao verificar status:', error);
+          return;
+        }
+
+        if (data?.success && data?.data?.status === 'connected') {
+          clearInterval(pollInterval);
+          setIsPolling(false);
+          setShowQrCode(false);
+          await loadConnections();
+          setError(null);
+        }
+      } catch (err) {
+        console.error('Erro no polling:', err);
+      }
+    }, 3000);
+
+    // Parar polling após 2 minutos
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      setIsPolling(false);
+    }, 120000);
+  };
+
   // Função para gerar QR Code com criação automática de instância
   const generateQRCodeWithAutoInstance = async () => {
     if (!user?.email) {
@@ -57,38 +95,31 @@ const WhatsAppConnection: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Extrair nome do usuário do email
       const username = extractUsernameFromEmail(user.email);
       const instanceName = `${username}_whatsapp`;
+      setCurrentInstance(instanceName);
       
-      // Tentar criar a instância primeiro
-      try {
-        const createResponse = await databaseClient.createWhatsAppInstance(instanceName);
-        
-        if (createResponse.success) {
-          // Instância criada com sucesso, aguardar um pouco e buscar QR code
-          setTimeout(async () => {
-            await getQRCode(instanceName);
-            await loadConnections();
-          }, 2000);
-        } else if (createResponse.error && createResponse.error.includes('já existe')) {
-          // Instância já existe, apenas buscar o QR code
-          setError('Use o botão QR Code para reconectar');
-          await getQRCode(instanceName);
-          await loadConnections();
-        } else {
-          setError(createResponse.error || 'Erro ao criar instância');
-        }
-      } catch (createError: any) {
-        if (createError.response?.status === 409) {
-          // Instância já existe, apenas buscar o QR code
-          setError('Use o botão QR Code para reconectar');
-          await getQRCode(instanceName);
-          await loadConnections();
-        } else {
-          throw createError;
-        }
+      // Criar instância via edge function
+      const { data: createData, error: createError } = await supabase.functions.invoke(
+        'create-whatsapp-instance',
+        { body: { instanceName } }
+      );
+
+      if (createError) {
+        throw createError;
       }
+
+      if (!createData?.success) {
+        throw new Error(createData?.error || 'Erro ao criar instância');
+      }
+
+      // Aguardar um pouco e buscar QR code
+      setTimeout(async () => {
+        await getQRCode(instanceName);
+        startStatusPolling(instanceName);
+      }, 2000);
+
+      await loadConnections();
     } catch (error: any) {
       console.error('Erro ao gerar QR Code:', error);
       setError(error.message || 'Erro ao gerar QR Code');
@@ -102,11 +133,18 @@ const WhatsAppConnection: React.FC = () => {
   const getQRCode = async (instance: string) => {
     try {
       setLoading(true);
-      const response = await databaseClient.getQRCode(instance);
+      setCurrentInstance(instance);
       
-      if (response.success && response.data?.base64) {
-        setQrCode(response.data.base64);
+      const { data, error } = await supabase.functions.invoke('get-whatsapp-qrcode', {
+        body: { instanceName: instance }
+      });
+
+      if (error) throw error;
+
+      if (data?.success && data?.data?.base64) {
+        setQrCode(data.data.base64);
         setShowQrCode(true);
+        startStatusPolling(instance);
       } else {
         setError('QR Code não disponível');
       }
@@ -125,12 +163,17 @@ const WhatsAppConnection: React.FC = () => {
 
     try {
       setLoading(true);
-      const response = await databaseClient.deleteInstance(instance);
       
-      if (response.success) {
+      const { data, error } = await supabase.functions.invoke('delete-whatsapp-instance', {
+        body: { instanceName: instance }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
         await loadConnections();
       } else {
-        setError(response.error || 'Erro ao deletar instância');
+        setError(data?.error || 'Erro ao deletar instância');
       }
     } catch (error: any) {
       console.error('Erro ao deletar instância:', error);
@@ -143,13 +186,19 @@ const WhatsAppConnection: React.FC = () => {
   const restartInstance = async (instance: string) => {
     try {
       setLoading(true);
-      const response = await databaseClient.restartInstance(instance);
       
-      if (response.success) {
+      // Deletar e recriar instância
+      await deleteInstance(instance);
+      
+      setTimeout(async () => {
+        const { data, error } = await supabase.functions.invoke('create-whatsapp-instance', {
+          body: { instanceName: instance }
+        });
+
+        if (error) throw error;
+        
         await loadConnections();
-      } else {
-        setError(response.error || 'Erro ao reiniciar instância');
-      }
+      }, 1000);
     } catch (error: any) {
       console.error('Erro ao reiniciar instância:', error);
       setError(error.message || 'Erro ao reiniciar instância');
@@ -161,12 +210,17 @@ const WhatsAppConnection: React.FC = () => {
   const logoutInstance = async (instance: string) => {
     try {
       setLoading(true);
-      const response = await databaseClient.logoutInstance(instance);
       
-      if (response.success) {
+      const { data, error } = await supabase.functions.invoke('logout-whatsapp-instance', {
+        body: { instanceName: instance }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
         await loadConnections();
       } else {
-        setError(response.error || 'Erro ao desconectar instância');
+        setError(data?.error || 'Erro ao desconectar instância');
       }
     } catch (error: any) {
       console.error('Erro ao desconectar instância:', error);
@@ -221,13 +275,18 @@ const WhatsAppConnection: React.FC = () => {
             </div>
             <div className="text-center">
               <img
-                src={`data:image/png;base64,${qrCode}`}
+                src={qrCode}
                 alt="QR Code"
                 className="mx-auto mb-4 max-w-full"
               />
-              <p className="text-gray-300 text-sm">
+              <p className="text-gray-300 text-sm mb-2">
                 Escaneie este QR Code com seu WhatsApp para conectar
               </p>
+              {isPolling && (
+                <p className="text-blue-400 text-sm animate-pulse">
+                  Aguardando conexão...
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -50,3 +50,18 @@ verify_jwt = false
 
 [functions.get-attendance-messages]
 verify_jwt = false
+
+[functions.create-whatsapp-instance]
+verify_jwt = true
+
+[functions.get-whatsapp-qrcode]
+verify_jwt = true
+
+[functions.check-whatsapp-status]
+verify_jwt = true
+
+[functions.delete-whatsapp-instance]
+verify_jwt = true
+
+[functions.logout-whatsapp-instance]
+verify_jwt = true
