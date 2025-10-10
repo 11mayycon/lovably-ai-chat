@@ -4,8 +4,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: false, // Seu servidor PostgreSQL local
+  connectionString: process.env.DATABASE_URL || 'postgresql://evolution:Evolution@2025!@31.97.94.107:5433/evolution',
+  ssl: false,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,

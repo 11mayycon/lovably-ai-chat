@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Bot, IdCard, Shield, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/lib/api-client";
 
 const SupportLogin = () => {
   const navigate = useNavigate();
@@ -22,12 +22,7 @@ const SupportLogin = () => {
 
     setLoading(true);
     try {
-      // Usar função pública para validar matrícula e buscar salas (bypass RLS)
-      const { data, error } = await supabase.functions.invoke("support-login", {
-        body: { matricula: matricula.trim().toUpperCase() },
-      });
-
-      if (error) throw error;
+      const data = await apiClient.supportLogin(matricula.trim().toUpperCase());
 
       if (!data?.success) {
         toast.error(data?.error || "Não foi possível validar sua matrícula");
@@ -35,7 +30,7 @@ const SupportLogin = () => {
       }
 
       const supportUser = data.supportUser;
-      const rooms = data.rooms as any[];
+      const rooms = data.rooms;
 
       if (!rooms || rooms.length === 0) {
         toast.error("Nenhuma sala vinculada à sua matrícula");
@@ -46,7 +41,6 @@ const SupportLogin = () => {
       sessionStorage.setItem("support_user", JSON.stringify(supportUser));
 
       toast.success(`Bem-vindo(a), ${supportUser.full_name}!`);
-      // Redirecionar diretamente para o chat
       navigate("/support/chat");
     } catch (error) {
       console.error("Erro ao fazer login:", error);

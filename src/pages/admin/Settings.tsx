@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 import { Building, User, Bell, Save, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -25,20 +25,17 @@ export default function Settings() {
   });
 
   useEffect(() => {
-    loadProfile();
+    if (user) {
+      loadProfile();
+      loadNotifications();
+    }
   }, [user]);
 
   const loadProfile = async () => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-
-      if (error) throw error;
+      const data = await apiClient.getProfile(user.id);
 
       if (data) {
         setProfile({
@@ -51,20 +48,26 @@ export default function Settings() {
     }
   };
 
+  const loadNotifications = async () => {
+    try {
+      const data = await apiClient.getSettings('notifications');
+      if (data && data.value) {
+        setNotifications(data.value);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar configurações:", error);
+    }
+  };
+
   const saveProfile = async () => {
     if (!user) return;
 
     try {
       setLoading(true);
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: profile.full_name,
-        })
-        .eq("id", user.id);
-
-      if (error) throw error;
+      await apiClient.updateProfile(user.id, {
+        full_name: profile.full_name,
+      });
 
       toast.success("Perfil atualizado com sucesso!");
     } catch (error) {
@@ -79,14 +82,7 @@ export default function Settings() {
     try {
       setLoading(true);
 
-      const { error } = await supabase
-        .from("settings")
-        .upsert({
-          key: "notifications",
-          value: notifications,
-        });
-
-      if (error) throw error;
+      await apiClient.saveSettings('notifications', notifications);
 
       toast.success("Preferências salvas com sucesso!");
     } catch (error) {

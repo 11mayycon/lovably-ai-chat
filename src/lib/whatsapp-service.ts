@@ -2,7 +2,7 @@ import QRCode from 'qrcode';
 import { instanceDb, contactDb, messageDb } from './browser-database';
 
 // Backend API local
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = 'http://31.97.94.107:3001/api';
 
 export interface WhatsAppInstance {
   instanceName: string;

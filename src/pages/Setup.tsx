@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Bot, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/lib/api-client";
 
 const Setup = () => {
   const navigate = useNavigate();
@@ -17,19 +17,11 @@ const Setup = () => {
 
   const checkForAdmin = async () => {
     try {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("id")
-        .eq("role", "admin")
-        .limit(1);
-
-      if (error) {
-        console.error("Error checking for admin:", error);
-      }
-
-      setAdminExists(data && data.length > 0);
+      // Check if any admin exists
+      const data = await apiClient.request('GET', '/admin/check-exists');
+      setAdminExists(data.exists);
     } catch (error) {
-      console.error("Error:", error);
+      console.error("Error checking for admin:", error);
     } finally {
       setChecking(false);
     }
@@ -38,33 +30,20 @@ const Setup = () => {
   const createFirstAdmin = async () => {
     setLoading(true);
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-first-admin`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            email: "maiconsillva2025@gmail.com",
-            password: "1285041",
-          }),
-        }
+      const data = await apiClient.createFirstAdmin(
+        "maiconsillva2025@gmail.com",
+        "1285041"
       );
 
-      const data = await response.json();
-
-      if (response.ok) {
+      if (data.success) {
         toast.success("Administrador criado com sucesso!");
         setTimeout(() => {
           navigate("/admin/login");
         }, 2000);
       } else {
-        console.error("Error response:", data);
         toast.error(data.error || "Erro ao criar administrador");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating admin:", error);
       toast.error("Erro ao criar administrador. Tente novamente.");
     } finally {

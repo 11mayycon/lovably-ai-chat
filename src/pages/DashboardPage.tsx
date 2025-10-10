@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { apiClient } from "@/lib/api-client";
 import { AlertCircle, CheckCircle, Calendar } from "lucide-react";
 
 interface Subscription {
@@ -17,32 +18,23 @@ interface Subscription {
 const DashboardPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, signOut } = useAuth();
   const [loading, setLoading] = useState(true);
   const [renewLoading, setRenewLoading] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [daysRemaining, setDaysRemaining] = useState(0);
 
   useEffect(() => {
-    checkAuth();
-  }, []);
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+    loadSubscription();
+  }, [user]);
 
-  const checkAuth = async () => {
+  const loadSubscription = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        navigate("/login");
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("user_id", user.id)
-        .single();
-
-      if (error) throw error;
-
+      const data = await apiClient.request('GET', `/subscriptions/${user?.id}`);
       setSubscription(data);
 
       // Calculate days remaining
@@ -68,15 +60,8 @@ const DashboardPage = () => {
   const handleRenew = async () => {
     setRenewLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        navigate("/login");
-        return;
-      }
-
       // Redirect to Stripe payment link
-      const paymentUrl = `https://buy.stripe.com/aFa6oIfC9du3fs008Z83C02?client_reference_id=${user.id}&prefilled_email=${encodeURIComponent(subscription?.email || '')}`;
+      const paymentUrl = `https://buy.stripe.com/aFa6oIfC9du3fs008Z83C02?client_reference_id=${user?.id}&prefilled_email=${encodeURIComponent(subscription?.email || '')}`;
       window.location.href = paymentUrl;
     } catch (error: any) {
       console.error("Error:", error);
@@ -91,8 +76,7 @@ const DashboardPage = () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/login");
+    await signOut();
   };
 
   if (loading) {

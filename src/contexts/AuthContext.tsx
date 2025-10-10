@@ -1,12 +1,16 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { User, Session } from "@supabase/supabase-js";
-import { supabasePublic } from "@/lib/supabase-public-client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { apiClient } from "@/lib/api-client";
+
+interface User {
+  id: string;
+  email: string;
+  full_name?: string;
+}
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   userRole: "admin" | "support" | "super_admin" | null;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -17,136 +21,66 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [userRole, setUserRole] = useState<"admin" | "support" | "super_admin" | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabasePublic.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          // Fetch user roles
-          setTimeout(async () => {
-            const { data: rolesData } = await supabasePublic
-              .from("user_roles")
-              .select("role")
-              .eq("user_id", session.user.id);
-            
-            if (rolesData && rolesData.length > 0) {
-              const roles = rolesData.map(r => r.role);
-              const role = roles.includes("super_admin") 
-                ? "super_admin" 
-                : roles.includes("admin")
-                ? "admin"
-                : roles.includes("support")
-                ? "support"
-                : null;
-              setUserRole(role);
-            } else {
-              setUserRole(null);
-            }
-          }, 0);
-        } else {
-          setUserRole(null);
-        }
-      }
-    );
-
-    // Check for existing session
-    supabasePublic.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        supabasePublic
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", session.user.id)
-          .then(({ data: rolesData }) => {
-            if (rolesData && rolesData.length > 0) {
-              const roles = rolesData.map(r => r.role);
-              const role = roles.includes("super_admin") 
-                ? "super_admin" 
-                : roles.includes("admin")
-                ? "admin"
-                : roles.includes("support")
-                ? "support"
-                : null;
-              setUserRole(role);
-            } else {
-              setUserRole(null);
-            }
-            setLoading(false);
-          });
-      } else {
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    checkAuth();
   }, []);
 
+  const checkAuth = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const data = await apiClient.getCurrentUser();
+      setUser(data.user);
+      setUserRole(data.role);
+    } catch (error) {
+      console.error('Error checking auth:', error);
+      localStorage.removeItem('token');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabasePublic.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const data = await apiClient.login(email, password);
+      
+      if (!data.token || !data.user) {
+        throw new Error("Erro ao fazer login");
+      }
 
-    if (error) {
+      localStorage.setItem('token', data.token);
+      setUser(data.user);
+      setUserRole(data.role);
+
+      // Navigate based on role
+      if (data.role === "admin" || data.role === "super_admin") {
+        navigate("/admin/dashboard");
+      } else if (data.role === "support") {
+        navigate("/support/select-room");
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
       throw error;
-    }
-
-    // Fetch all user roles (user may have multiple roles)
-    const { data: rolesData } = await supabasePublic
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", data.user.id);
-
-    if (!rolesData || rolesData.length === 0) {
-      toast.error("Usuário sem permissões atribuídas");
-      await supabasePublic.auth.signOut();
-      return;
-    }
-
-    // Prioritize super_admin, then admin, then support
-    const roles = rolesData.map(r => r.role);
-    const role = roles.includes("super_admin") 
-      ? "super_admin" 
-      : roles.includes("admin")
-      ? "admin"
-      : roles.includes("support")
-      ? "support"
-      : null;
-
-    if (!role) {
-      toast.error("Usuário sem permissões válidas");
-      await supabasePublic.auth.signOut();
-      return;
-    }
-
-    setUserRole(role);
-
-    // Navigate based on role
-    if (role === "admin" || role === "super_admin") {
-      navigate("/admin/dashboard");
-    } else if (role === "support") {
-      navigate("/support/select-room");
     }
   };
 
   const signOut = async () => {
-    await supabasePublic.auth.signOut();
+    await apiClient.logout();
+    setUser(null);
     setUserRole(null);
     navigate("/");
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, userRole, signIn, signOut, loading }}>
+    <AuthContext.Provider value={{ user, userRole, signIn, signOut, loading }}>
       {children}
     </AuthContext.Provider>
   );

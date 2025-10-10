@@ -2,13 +2,12 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
 import { Brain, Save, Lightbulb, RefreshCw } from "lucide-react";
 
 export default function AIMemory() {
   const [instructions, setInstructions] = useState("");
-  const [memoryId, setMemoryId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -19,19 +18,13 @@ export default function AIMemory() {
 
   const loadMemory = async () => {
     try {
-      const { data, error } = await supabase
-        .from("ai_memory")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (error && error.code !== "PGRST116") throw error;
+      const data = await apiClient.getAIMemory();
       
       if (data) {
-        setInstructions(data.instructions);
-        setMemoryId(data.id);
-        setLastSaved(new Date(data.updated_at));
+        setInstructions(data.instructions || "");
+        if (data.updated_at) {
+          setLastSaved(new Date(data.updated_at));
+        }
       }
     } catch (error) {
       console.error("Erro ao carregar memória:", error);
@@ -48,25 +41,7 @@ export default function AIMemory() {
 
     try {
       setSaving(true);
-
-      if (memoryId) {
-        const { error } = await supabase
-          .from("ai_memory")
-          .update({ instructions })
-          .eq("id", memoryId);
-
-        if (error) throw error;
-      } else {
-        const { data, error } = await supabase
-          .from("ai_memory")
-          .insert({ instructions })
-          .select()
-          .single();
-
-        if (error) throw error;
-        setMemoryId(data.id);
-      }
-
+      await apiClient.saveAIMemory(instructions);
       setLastSaved(new Date());
       toast.success("Memória da IA salva com sucesso!");
     } catch (error) {
