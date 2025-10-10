@@ -57,8 +57,7 @@ const WhatsAppConnection: React.FC = () => {
     const pollInterval = setInterval(async () => {
       try {
         const { data, error } = await supabase.functions.invoke('check-whatsapp-status', {
-          body: JSON.stringify({ instanceName }),
-          headers: { 'Content-Type': 'application/json' }
+          body: { instanceName }
         });
 
         if (error) {
@@ -106,10 +105,7 @@ const WhatsAppConnection: React.FC = () => {
       const { data: createData, error: createError } = await supabase.functions.invoke(
         'create-whatsapp-instance',
         { 
-          body: JSON.stringify({ instanceName }),
-          headers: {
-            'Content-Type': 'application/json'
-          }
+          body: { instanceName }
         }
       );
 
@@ -147,8 +143,7 @@ const WhatsAppConnection: React.FC = () => {
       setCurrentInstance(instance);
       
       const { data, error } = await supabase.functions.invoke('get-whatsapp-qrcode', {
-        body: JSON.stringify({ instanceName: instance }),
-        headers: { 'Content-Type': 'application/json' }
+        body: { instanceName: instance }
       });
 
       if (error) throw error;
@@ -177,8 +172,7 @@ const WhatsAppConnection: React.FC = () => {
       setLoading(true);
       
       const { data, error } = await supabase.functions.invoke('delete-whatsapp-instance', {
-        body: JSON.stringify({ instanceName: instance }),
-        headers: { 'Content-Type': 'application/json' }
+        body: { instanceName: instance }
       });
 
       if (error) throw error;
@@ -205,8 +199,7 @@ const WhatsAppConnection: React.FC = () => {
       
       setTimeout(async () => {
         const { data, error } = await supabase.functions.invoke('create-whatsapp-instance', {
-          body: JSON.stringify({ instanceName: instance }),
-          headers: { 'Content-Type': 'application/json' }
+          body: { instanceName: instance }
         });
 
         if (error) throw error;
@@ -226,8 +219,7 @@ const WhatsAppConnection: React.FC = () => {
       setLoading(true);
       
       const { data, error } = await supabase.functions.invoke('logout-whatsapp-instance', {
-        body: JSON.stringify({ instanceName: instance }),
-        headers: { 'Content-Type': 'application/json' }
+        body: { instanceName: instance }
       });
 
       if (error) throw error;
