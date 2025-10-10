@@ -99,14 +99,24 @@ const WhatsAppConnection: React.FC = () => {
       const instanceName = `${username}_whatsapp`;
       setCurrentInstance(instanceName);
       
+      console.log('Criando instância:', instanceName);
+      
       // Criar instância via edge function
       const { data: createData, error: createError } = await supabase.functions.invoke(
         'create-whatsapp-instance',
-        { body: { instanceName } }
+        { 
+          body: { instanceName },
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
 
+      console.log('Resposta da criação:', createData, createError);
+
       if (createError) {
-        throw createError;
+        console.error('Erro ao criar instância:', createError);
+        throw new Error(`Erro ao criar instância: ${createError.message}`);
       }
 
       if (!createData?.success) {
@@ -122,7 +132,7 @@ const WhatsAppConnection: React.FC = () => {
       await loadConnections();
     } catch (error: any) {
       console.error('Erro ao gerar QR Code:', error);
-      setError(error.message || 'Erro ao gerar QR Code');
+      setError(error.message || 'Erro ao gerar QR Code. Verifique se as credenciais da Evolution API estão configuradas.');
     } finally {
       setLoading(false);
     }
