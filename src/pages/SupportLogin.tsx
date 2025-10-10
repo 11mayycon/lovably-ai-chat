@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Bot, IdCard, Shield, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { apiClient } from "@/lib/api-client";
+import { supabase } from "@/integrations/supabase/client";
 
 const SupportLogin = () => {
   const navigate = useNavigate();
@@ -22,9 +22,11 @@ const SupportLogin = () => {
 
     setLoading(true);
     try {
-      const data = await apiClient.supportLogin(matricula.trim().toUpperCase());
+      const { data, error } = await supabase.functions.invoke('support-login', {
+        body: { matricula: matricula.trim().toUpperCase() }
+      });
 
-      if (!data?.success) {
+      if (error || !data?.success) {
         toast.error(data?.error || "Não foi possível validar sua matrícula");
         return;
       }

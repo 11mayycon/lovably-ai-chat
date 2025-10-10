@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiClient } from "@/lib/api-client";
+import { supabase } from "@/integrations/supabase/client";
 import { AlertCircle, CheckCircle, Calendar } from "lucide-react";
 
 interface Subscription {
@@ -33,8 +33,17 @@ const DashboardPage = () => {
   }, [user]);
 
   const loadSubscription = async () => {
+    if (!user?.id) return;
+    
     try {
-      const data = await apiClient.request('GET', `/subscriptions/${user?.id}`);
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) throw error;
+      
       setSubscription(data);
 
       // Calculate days remaining

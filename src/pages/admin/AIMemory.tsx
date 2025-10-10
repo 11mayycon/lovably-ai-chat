@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { apiClient } from "@/lib/api-client";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Brain, Save, Lightbulb, RefreshCw } from "lucide-react";
 
@@ -18,9 +18,13 @@ export default function AIMemory() {
 
   const loadMemory = async () => {
     try {
-      const data = await apiClient.getAIMemory();
+      const { data, error } = await supabase
+        .from('ai_memory')
+        .select('*')
+        .limit(1)
+        .maybeSingle();
       
-      if (data) {
+      if (!error && data) {
         setInstructions(data.instructions || "");
         if (data.updated_at) {
           setLastSaved(new Date(data.updated_at));
@@ -41,7 +45,24 @@ export default function AIMemory() {
 
     try {
       setSaving(true);
-      await apiClient.saveAIMemory(instructions);
+      
+      const { data: existing } = await supabase
+        .from('ai_memory')
+        .select('id')
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase
+          .from('ai_memory')
+          .update({ instructions, updated_at: new Date().toISOString() })
+          .eq('id', existing.id);
+      } else {
+        await supabase
+          .from('ai_memory')
+          .insert({ instructions });
+      }
+      
       setLastSaved(new Date());
       toast.success("Memória da IA salva com sucesso!");
     } catch (error) {

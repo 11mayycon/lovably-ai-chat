@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Bot, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { apiClient } from "@/lib/api-client";
+import { supabase } from "@/integrations/supabase/client";
 
 const Setup = () => {
   const navigate = useNavigate();
@@ -17,9 +17,12 @@ const Setup = () => {
 
   const checkForAdmin = async () => {
     try {
-      // Check if any admin exists
-      const data = await apiClient.request('GET', '/admin/check-exists');
-      setAdminExists(data.exists);
+      const { count } = await supabase
+        .from('user_roles')
+        .select('*', { count: 'exact', head: true })
+        .eq('role', 'admin');
+      
+      setAdminExists((count ?? 0) > 0);
     } catch (error) {
       console.error("Error checking for admin:", error);
     } finally {
@@ -30,19 +33,22 @@ const Setup = () => {
   const createFirstAdmin = async () => {
     setLoading(true);
     try {
-      const data = await apiClient.createFirstAdmin(
-        "maiconsillva2025@gmail.com",
-        "1285041"
-      );
+      const { data, error } = await supabase.functions.invoke('create-first-admin', {
+        body: {
+          email: "maiconsillva2025@gmail.com",
+          password: "1285041"
+        }
+      });
 
-      if (data.success) {
-        toast.success("Administrador criado com sucesso!");
-        setTimeout(() => {
-          navigate("/admin/login");
-        }, 2000);
-      } else {
-        toast.error(data.error || "Erro ao criar administrador");
+      if (error || !data.success) {
+        toast.error(data?.error || "Erro ao criar administrador");
+        return;
       }
+
+      toast.success("Administrador criado com sucesso!");
+      setTimeout(() => {
+        navigate("/admin/login");
+      }, 2000);
     } catch (error: any) {
       console.error("Error creating admin:", error);
       toast.error("Erro ao criar administrador. Tente novamente.");

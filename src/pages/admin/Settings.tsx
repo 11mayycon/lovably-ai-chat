@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/AuthContext";
-import { apiClient } from "@/lib/api-client";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Building, User, Bell, Save, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -35,9 +35,13 @@ export default function Settings() {
     if (!user) return;
 
     try {
-      const data = await apiClient.getProfile(user.id);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
-      if (data) {
+      if (!error && data) {
         setProfile({
           full_name: data.full_name || "",
           email: data.email || "",
@@ -50,8 +54,13 @@ export default function Settings() {
 
   const loadNotifications = async () => {
     try {
-      const data = await apiClient.getSettings('notifications');
-      if (data && data.value) {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'notifications')
+        .maybeSingle();
+      
+      if (!error && data?.value) {
         setNotifications(data.value);
       }
     } catch (error) {
@@ -65,9 +74,12 @@ export default function Settings() {
     try {
       setLoading(true);
 
-      await apiClient.updateProfile(user.id, {
-        full_name: profile.full_name,
-      });
+      const { error } = await supabase
+        .from('profiles')
+        .update({ full_name: profile.full_name })
+        .eq('id', user.id);
+
+      if (error) throw error;
 
       toast.success("Perfil atualizado com sucesso!");
     } catch (error) {
@@ -82,7 +94,15 @@ export default function Settings() {
     try {
       setLoading(true);
 
-      await apiClient.saveSettings('notifications', notifications);
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          key: 'notifications',
+          value: notifications,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
 
       toast.success("Preferências salvas com sucesso!");
     } catch (error) {

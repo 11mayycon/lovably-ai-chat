@@ -1,13 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import { apiClient } from "@/lib/api-client";
-
-interface User {
-  id: string;
-  email: string;
-  full_name?: string;
-}
+import { supabase } from "@/integrations/supabase/client";
+import { User } from "@supabase/supabase-js";
 
 interface AuthContextType {
   user: User | null;
@@ -27,53 +21,76 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     checkAuth();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserRole(session.user.id);
+      } else {
+        setUserRole(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const checkAuth = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
     try {
-      const data = await apiClient.getCurrentUser();
-      setUser(data.user);
-      setUserRole(data.role);
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        await fetchUserRole(session.user.id);
+      }
     } catch (error) {
       console.error('Error checking auth:', error);
-      localStorage.removeItem('token');
     } finally {
       setLoading(false);
     }
   };
 
-  const signIn = async (email: string, password: string) => {
+  const fetchUserRole = async (userId: string) => {
     try {
-      const data = await apiClient.login(email, password);
-      
-      if (!data.token || !data.user) {
-        throw new Error("Erro ao fazer login");
-      }
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .single();
 
-      localStorage.setItem('token', data.token);
-      setUser(data.user);
-      setUserRole(data.role);
-
-      // Navigate based on role
-      if (data.role === "admin" || data.role === "super_admin") {
-        navigate("/admin/dashboard");
-      } else if (data.role === "support") {
-        navigate("/support/select-room");
+      if (!error && data) {
+        setUserRole(data.role as "admin" | "support" | "super_admin");
       }
-    } catch (error: any) {
-      console.error('Login error:', error);
-      throw error;
+    } catch (error) {
+      console.error('Error fetching user role:', error);
+    }
+  };
+
+  const signIn = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) throw error;
+    if (!data.user) throw new Error("Erro ao fazer login");
+
+    await fetchUserRole(data.user.id);
+
+    // Navigate based on role
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', data.user.id)
+      .single();
+
+    if (roleData?.role === "admin" || roleData?.role === "super_admin") {
+      navigate("/admin/dashboard");
+    } else if (roleData?.role === "support") {
+      navigate("/support/select-room");
     }
   };
 
   const signOut = async () => {
-    await apiClient.logout();
+    await supabase.auth.signOut();
     setUser(null);
     setUserRole(null);
     navigate("/");

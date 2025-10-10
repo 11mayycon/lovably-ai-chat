@@ -5,11 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { signIn } = useAuth();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,44 +20,12 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      if (!data.user) {
-        throw new Error("Erro ao fazer login");
-      }
-
-      // Check subscription status
-      const { data: subscription, error: subError } = await supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("user_id", data.user.id)
-        .single();
-
-      if (subError) {
-        throw new Error("Assinatura não encontrada");
-      }
-
-      if (subscription.status !== "active") {
-        toast({
-          title: "Assinatura inativa",
-          description: "Sua assinatura está pendente ou expirada. Complete o pagamento para acessar.",
-          variant: "destructive",
-        });
-        await supabase.auth.signOut();
-        return;
-      }
-
+      await signIn(email, password);
+      
       toast({
         title: "Login realizado!",
         description: "Bem-vindo ao ISA 2.5",
       });
-
-      navigate("/painel");
     } catch (error: any) {
       console.error("Login error:", error);
       toast({
