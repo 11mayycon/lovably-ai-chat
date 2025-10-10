@@ -20,16 +20,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    checkAuth();
-    
+    // Register listener first to avoid missing auth events
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserRole(session.user.id);
+        // Defer to avoid potential deadlocks
+        setTimeout(() => {
+          fetchUserRole(session.user!.id);
+        }, 0);
       } else {
         setUserRole(null);
       }
     });
+
+    checkAuth();
 
     return () => subscription.unsubscribe();
   }, []);
@@ -53,14 +57,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
-        .eq('user_id', userId)
-        .single();
+        .eq('user_id', userId);
 
-      if (!error && data) {
-        setUserRole(data.role as "admin" | "support" | "super_admin");
-      }
+      if (error) throw error;
+
+      const roles = (data ?? []).map((r: any) => r.role) as ("admin" | "support" | "super_admin")[];
+      const resolvedRole = roles.includes("super_admin")
+        ? "super_admin"
+        : roles.includes("admin")
+        ? "admin"
+        : roles.includes("support")
+        ? "support"
+        : null;
+
+      setUserRole(resolvedRole);
+      return resolvedRole;
     } catch (error) {
       console.error('Error fetching user role:', error);
+      setUserRole(null);
+      return null;
     }
   };
 
@@ -73,25 +88,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (error) throw error;
     if (!data.user) throw new Error("Erro ao fazer login");
 
-    // Fetch user role
-    const { data: roleData, error: roleError } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', data.user.id)
-      .single();
+    // Resolve role and navigate
+    const resolvedRole = await fetchUserRole(data.user.id);
 
-    if (roleError) {
-      console.error('Error fetching role:', roleError);
-      throw new Error("Erro ao buscar permissões do usuário");
-    }
-
-    // Update state
-    setUserRole(roleData.role as "admin" | "support" | "super_admin");
-
-    // Navigate based on role
-    if (roleData?.role === "admin" || roleData?.role === "super_admin") {
+    if (resolvedRole === "admin" || resolvedRole === "super_admin") {
       navigate("/admin/dashboard", { replace: true });
-    } else if (roleData?.role === "support") {
+    } else if (resolvedRole === "support") {
       navigate("/support/select-room", { replace: true });
     } else {
       throw new Error("Usuário sem permissões adequadas");
