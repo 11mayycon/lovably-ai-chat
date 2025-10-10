@@ -104,10 +104,10 @@ const LandingPage = () => {
             ))}
           </div>
 
-          {/* Main CTA Card */}
+          {/* Main CTA Card with iPhone Mockup */}
           <Card className="bg-gradient-to-br from-blue-900/40 to-purple-900/40 border-blue-500/30 backdrop-blur-md overflow-hidden animate-fade-in">
             <CardContent className="p-8 md:p-12">
-              <div className="grid md:grid-cols-2 gap-8 items-center">
+              <div className="grid md:grid-cols-2 gap-12 items-center">
                 <div className="space-y-6">
                   <div className="space-y-4">
                     {benefits.map((benefit, index) => (
@@ -129,9 +129,7 @@ const LandingPage = () => {
                       🔥 Oferta especial de lançamento • Cancele quando quiser
                     </p>
                   </div>
-                </div>
 
-                <div className="space-y-4">
                   <Button 
                     size="lg" 
                     className="w-full text-lg h-16 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-bold shadow-lg shadow-blue-500/50 hover:shadow-xl hover:shadow-blue-500/60 transition-all duration-300 hover:scale-105 animate-float"
@@ -144,6 +142,58 @@ const LandingPage = () => {
                   <div className="text-center text-sm text-slate-400">
                     <Clock className="w-4 h-4 inline mr-1" />
                     Ativação instantânea • Sem burocracia
+                  </div>
+                </div>
+
+                {/* iPhone Mockup with WhatsApp Interface */}
+                <div className="flex justify-center">
+                  <div className="relative w-[280px] h-[560px] bg-slate-900 rounded-[3rem] border-8 border-slate-800 shadow-2xl shadow-blue-500/30 animate-float">
+                    {/* iPhone Notch */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-slate-900 rounded-b-2xl z-10"></div>
+                    
+                    {/* iPhone Screen */}
+                    <div className="absolute inset-2 bg-white rounded-[2.3rem] overflow-hidden">
+                      {/* WhatsApp Header */}
+                      <div className="bg-emerald-600 px-4 py-3 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-emerald-400 flex items-center justify-center">
+                          <Bot className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-white font-semibold">ISA 2.5</div>
+                          <div className="text-emerald-100 text-xs">online</div>
+                        </div>
+                      </div>
+
+                      {/* Chat Background */}
+                      <div className="h-[calc(100%-60px)] bg-emerald-50/50 p-3 space-y-2">
+                        {/* Received Message */}
+                        <div className="flex gap-2">
+                          <div className="bg-white rounded-lg rounded-tl-none p-3 shadow-sm max-w-[75%]">
+                            <p className="text-sm text-slate-800">Olá! Como posso ajudar você hoje? 👋</p>
+                            <span className="text-xs text-slate-400 mt-1 block">10:30</span>
+                          </div>
+                        </div>
+
+                        {/* Sent Message */}
+                        <div className="flex gap-2 justify-end">
+                          <div className="bg-emerald-500 rounded-lg rounded-tr-none p-3 shadow-sm max-w-[75%]">
+                            <p className="text-sm text-white">Preciso de suporte</p>
+                            <span className="text-xs text-emerald-100 mt-1 block text-right">10:31</span>
+                          </div>
+                        </div>
+
+                        {/* Received Message */}
+                        <div className="flex gap-2">
+                          <div className="bg-white rounded-lg rounded-tl-none p-3 shadow-sm max-w-[75%]">
+                            <p className="text-sm text-slate-800">Claro! Estou aqui 24/7 para te ajudar. Em que posso auxiliar? 🤖</p>
+                            <span className="text-xs text-slate-400 mt-1 block">10:31</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* iPhone Button */}
+                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1 bg-slate-700 rounded-full"></div>
                   </div>
                 </div>
               </div>
