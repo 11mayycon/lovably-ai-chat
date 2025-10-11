@@ -78,6 +78,30 @@ Deno.serve(async (req) => {
     const evolutionData = await evolutionResponse.json()
     console.log('Instância criada com sucesso:', evolutionData)
 
+    // Aguardar um pouco para a instância estar pronta
+    await new Promise(resolve => setTimeout(resolve, 2000))
+
+    // Buscar QR Code imediatamente após criar a instância
+    let qrCodeData = null
+    try {
+      console.log('Buscando QR code para:', instanceName)
+      const qrResponse = await fetch(`${EVO_BASE_URL}/instance/connect/${instanceName}`, {
+        method: 'GET',
+        headers: {
+          'apikey': EVO_API_KEY,
+        },
+      })
+
+      if (qrResponse.ok) {
+        qrCodeData = await qrResponse.json()
+        console.log('QR code obtido com sucesso')
+      } else {
+        console.warn('QR code não disponível ainda')
+      }
+    } catch (qrError) {
+      console.warn('Erro ao buscar QR code:', qrError)
+    }
+
     // Salvar no banco de dados
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -112,6 +136,7 @@ Deno.serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         data: evolutionData,
+        qrCode: qrCodeData,
         instanceName 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

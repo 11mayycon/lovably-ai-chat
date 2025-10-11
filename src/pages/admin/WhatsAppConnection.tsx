@@ -1,18 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '../../contexts/AuthContext';
-
-interface WhatsAppConnection {
-  id: string;
-  instance_name: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
+import { db, WhatsAppInstance } from '../../lib/database';
+import { evolutionApi } from '../../lib/evolutionApi';
 
 const WhatsAppConnection: React.FC = () => {
   const { user } = useAuth();
-  const [connections, setConnections] = useState<WhatsAppConnection[]>([]);
+  const [connections, setConnections] = useState<WhatsAppInstance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
@@ -27,13 +20,8 @@ const WhatsAppConnection: React.FC = () => {
   const loadConnections = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('whatsapp_connections')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      setConnections(data || []);
+      const instances = await db.getInstances();
+      setConnections(instances);
     } catch (error) {
       console.error('Erro ao carregar conexões:', error);
       setError('Erro ao carregar conexões WhatsApp');
@@ -56,19 +44,15 @@ const WhatsAppConnection: React.FC = () => {
     setIsPolling(true);
     const pollInterval = setInterval(async () => {
       try {
-        const { data, error } = await supabase.functions.invoke('check-whatsapp-status', {
-          body: { instanceName }
-        });
+        const status = await evolutionApi.getInstanceStatus(instanceName);
 
-        if (error) {
-          console.error('Erro ao verificar status:', error);
-          return;
-        }
-
-        if (data?.success && data?.data?.status === 'connected') {
+        if (status === 'open' || status === 'connected') {
           clearInterval(pollInterval);
           setIsPolling(false);
           setShowQrCode(false);
+          
+          // Atualizar status no banco local
+          await db.updateInstance(instanceName, { status: 'connected' });
           await loadConnections();
           setError(null);
         }
@@ -101,23 +85,22 @@ const WhatsAppConnection: React.FC = () => {
       
       console.log('Criando instância:', instanceName);
       
-      // Criar instância via edge function
-      const { data: createData, error: createError } = await supabase.functions.invoke(
-        'create-whatsapp-instance',
-        { 
-          body: { instanceName }
+      // Criar instância no banco local
+      try {
+        await db.createInstance(instanceName);
+      } catch (dbError: any) {
+        if (!dbError.message.includes('already exists')) {
+          throw dbError;
         }
-      );
-
-      console.log('Resposta da criação:', createData, createError);
-
-      if (createError) {
-        console.error('Erro ao criar instância:', createError);
-        throw new Error(`Erro ao criar instância: ${createError.message}`);
       }
+      
+      // Criar instância via Evolution API
+      const createResult = await evolutionApi.createInstance(instanceName);
 
-      if (!createData?.success) {
-        throw new Error(createData?.error || 'Erro ao criar instância');
+      console.log('Resposta da criação:', createResult);
+
+      if (!createResult.success) {
+        throw new Error(createResult.error || 'Erro ao criar instância');
       }
 
       // Aguardar um pouco e buscar QR code
@@ -142,14 +125,10 @@ const WhatsAppConnection: React.FC = () => {
       setLoading(true);
       setCurrentInstance(instance);
       
-      const { data, error } = await supabase.functions.invoke('get-whatsapp-qrcode', {
-        body: { instanceName: instance }
-      });
+      const qrData = await evolutionApi.getQRCode(instance);
 
-      if (error) throw error;
-
-      if (data?.success && data?.data?.base64) {
-        setQrCode(data.data.base64);
+      if (qrData?.base64) {
+        setQrCode(qrData.base64);
         setShowQrCode(true);
         startStatusPolling(instance);
       } else {
@@ -171,16 +150,13 @@ const WhatsAppConnection: React.FC = () => {
     try {
       setLoading(true);
       
-      const { data, error } = await supabase.functions.invoke('delete-whatsapp-instance', {
-        body: { instanceName: instance }
-      });
+      const result = await evolutionApi.deleteInstance(instance);
 
-      if (error) throw error;
-
-      if (data?.success) {
+      if (result.success) {
+        await db.deleteInstance(instance);
         await loadConnections();
       } else {
-        setError(data?.error || 'Erro ao deletar instância');
+        setError(result.error || 'Erro ao deletar instância');
       }
     } catch (error: any) {
       console.error('Erro ao deletar instância:', error);
@@ -198,11 +174,11 @@ const WhatsAppConnection: React.FC = () => {
       await deleteInstance(instance);
       
       setTimeout(async () => {
-        const { data, error } = await supabase.functions.invoke('create-whatsapp-instance', {
-          body: { instanceName: instance }
-        });
+        const result = await evolutionApi.createInstance(instance);
 
-        if (error) throw error;
+        if (!result.success) {
+          throw new Error(result.error || 'Erro ao recriar instância');
+        }
         
         await loadConnections();
       }, 1000);
@@ -218,16 +194,13 @@ const WhatsAppConnection: React.FC = () => {
     try {
       setLoading(true);
       
-      const { data, error } = await supabase.functions.invoke('logout-whatsapp-instance', {
-        body: { instanceName: instance }
-      });
+      const result = await evolutionApi.logoutInstance(instance);
 
-      if (error) throw error;
-
-      if (data?.success) {
+      if (result.success) {
+        await db.updateInstance(instance, { status: 'disconnected' });
         await loadConnections();
       } else {
-        setError(data?.error || 'Erro ao desconectar instância');
+        setError(result.error || 'Erro ao desconectar instância');
       }
     } catch (error: any) {
       console.error('Erro ao desconectar instância:', error);
@@ -305,14 +278,18 @@ const WhatsAppConnection: React.FC = () => {
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
                 {qrCode && (
                   <>
-                    <div className="bg-gradient-to-br from-primary/5 to-accent/5 rounded-2xl p-6 border border-border/50">
-                      <div className="bg-white p-4 rounded-xl inline-block mx-auto">
-                        <img
-                          src={qrCode}
-                          alt="QR Code WhatsApp"
-                          className="w-64 h-64 mx-auto"
-                        />
-                      </div>
+                    <div className="flex justify-center">
+                      <img
+                        src={qrCode}
+                        alt="QR Code WhatsApp"
+                        className="w-64 h-64 block"
+                        style={{ 
+                          backgroundColor: 'white',
+                          border: '2px solid #e5e7eb',
+                          borderRadius: '8px',
+                          padding: '8px'
+                        }}
+                      />
                     </div>
 
                     <div className="text-center space-y-3">

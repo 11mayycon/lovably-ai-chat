@@ -15,4 +15,9 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  define: {
+    // Garantir que as variáveis de ambiente sejam incluídas no build
+    'import.meta.env.VITE_EVO_BASE_URL': JSON.stringify(process.env.VITE_EVO_BASE_URL),
+    'import.meta.env.VITE_EVO_API_KEY': JSON.stringify(process.env.VITE_EVO_API_KEY),
+  },
 }));
