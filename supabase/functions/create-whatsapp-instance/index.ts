@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
       .from('whatsapp_connections')
       .insert({
         instance_name: instanceName,
-        status: 'connecting',
+        status: 'disconnected',
         admin_user_id: user.id,
       })
 
