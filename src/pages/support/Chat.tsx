@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { databaseClient } from "@/lib/database-client";
 import { whatsappService } from "@/lib/whatsapp-service";
 import { supabase } from "@/integrations/supabase/client";
+import { ConnectionStatus } from "@/components/chat/ConnectionStatus";
 
 const Chat = () => {
   const navigate = useNavigate();
@@ -265,180 +266,188 @@ const Chat = () => {
   }
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
-      {/* Sidebar de Contatos */}
-      <div className="w-96 border-r border-border bg-card flex flex-col">
-        <div className="p-4 border-b border-border">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-lg">Contatos</h2>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/support-login")}>
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
+    <div className="flex h-screen flex-col bg-background text-foreground">
+      {/* Status de Conexão */}
+      <ConnectionStatus onReconnect={loadWhatsAppContacts} />
+      
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar de Contatos */}
+        <div className="w-96 border-r border-border bg-card flex flex-col">
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-lg">Contatos</h2>
+              <Button variant="ghost" size="sm" onClick={() => navigate("/support-login")}>
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+            </div>
+            {supportUser && (
+              <div className="text-sm text-muted-foreground mb-3">
+                Logado como: <span className="font-semibold text-foreground">{supportUser.full_name}</span>
+              </div>
+            )}
           </div>
-          {supportUser && (
-            <div className="text-sm text-muted-foreground mb-3">
-              Logado como: <span className="font-semibold text-foreground">{supportUser.full_name}</span>
+          
+          <ScrollArea className="flex-1">
+            <div className="p-2 space-y-2">
+              <h3 className="text-sm font-semibold text-muted-foreground px-2 mb-2">
+                Atendimentos ({whatsappContacts.length})
+              </h3>
+              {whatsappContacts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  Carregando contatos...
+                </div>
+              ) : (
+                whatsappContacts.map((contact) => (
+                  <Card 
+                    key={contact.id} 
+                    className={`p-4 cursor-pointer transition-all hover:shadow-md ${
+                      selectedContact?.id === contact.id ? "border-primary bg-primary/5" : ""
+                    }`} 
+                    onClick={() => handleSelectContact(contact)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 relative">
+                        {contact.isAI ? (
+                          <BrainCircuit className="w-5 h-5 text-primary" />
+                        ) : contact.isWhatsApp ? (
+                          <>
+                            <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                              <MessageCircle className="w-3 h-3 text-white" />
+                            </div>
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
+                          </>
+                        ) : (
+                          <MessageCircle className="w-5 h-5 text-primary" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sm block truncate">{contact.name}</span>
+                          {contact.isWhatsApp && (
+                            <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
+                              WhatsApp
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {contact.isAI ? 'Assistente Virtual' : contact.phone}
+                          {contact.isWhatsApp && contact.instanceName && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              • {contact.instanceName}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                ))
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* Área de Chat */}
+        <div className="flex-1 flex flex-col">
+          {selectedContact ? (
+            <>
+              {/* Header do Chat */}
+              <div className="h-16 border-b border-border px-6 flex items-center justify-between bg-card">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold">
+                    {selectedContact.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">{selectedContact.name}</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedContact.isAI ? 'Assistente Virtual' : selectedContact.phone}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Área de Mensagens */}
+              <ScrollArea className="flex-1 p-6 bg-muted/20" ref={scrollAreaRef}>
+                <div className="space-y-4 mb-4">
+                  {chatMessages.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>Inicie uma conversa enviando uma mensagem</p>
+                    </div>
+                  ) : (
+                    chatMessages.map((msg) => (
+                      <div key={msg.id} className={`flex ${msg.sender_type === 'agent' ? "justify-end" : "justify-start"}`}>
+                        <div className={`flex gap-3 max-w-[70%] ${msg.sender_type === 'agent' ? "flex-row-reverse" : ""}`}>
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
+                            {msg.sender_type === 'ai' ? (
+                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                <Bot className="w-4 h-4 text-primary" />
+                              </div>
+                            ) : msg.sender_type === 'agent' ? (
+                              <div className="w-8 h-8 rounded-full bg-gradient-secondary flex items-center justify-center text-white text-sm font-bold">
+                                A
+                              </div>
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                                <User className="w-4 h-4" />
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <div className={`rounded-2xl px-4 py-2 ${
+                              msg.sender_type === 'agent' 
+                                ? "bg-primary text-primary-foreground" 
+                                : "bg-card text-foreground"
+                            }`}>
+                              <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                            </div>
+                            <span className="text-xs text-muted-foreground mt-1 block px-2">
+                              {new Date(msg.created_at).toLocaleTimeString('pt-BR', { 
+                                hour: '2-digit', 
+                                minute: '2-digit' 
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+
+              {/* Input de Mensagem */}
+              <div className="border-t border-border p-4 bg-card space-y-3">
+                <div className="flex items-center gap-3">
+                  <Input 
+                    placeholder="Digite sua mensagem..." 
+                    value={message} 
+                    onChange={(e) => setMessage(e.target.value)} 
+                    onKeyPress={(e) => e.key === "Enter" && handleSend()} 
+                    className="flex-1" 
+                    disabled={isSending} 
+                  />
+                  <Button 
+                    onClick={handleSend} 
+                    className="bg-gradient-primary" 
+                    disabled={isSending}
+                  >
+                    {isSending ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Send className="w-5 h-5" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-muted-foreground">
+                <MessageCircle className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <p>Selecione um contato para iniciar uma conversa</p>
+              </div>
             </div>
           )}
         </div>
-        
-        <ScrollArea className="flex-1">
-          <div className="p-2 space-y-2">
-            <h3 className="text-sm font-semibold text-muted-foreground px-2 mb-2">
-              Atendimentos ({whatsappContacts.length})
-            </h3>
-            {whatsappContacts.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                Carregando contatos...
-              </div>
-            ) : (
-              whatsappContacts.map((contact) => (
-                <Card 
-                  key={contact.id} 
-                  className={`p-4 cursor-pointer transition-all hover:shadow-md ${
-                    selectedContact?.id === contact.id ? "border-primary bg-primary/5" : ""
-                  }`} 
-                  onClick={() => handleSelectContact(contact)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      {contact.isAI ? (
-                        <BrainCircuit className="w-5 h-5 text-primary" />
-                      ) : contact.isWhatsApp ? (
-                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                          <MessageCircle className="w-3 h-3 text-white" />
-                        </div>
-                      ) : (
-                        <MessageCircle className="w-5 h-5 text-primary" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm block truncate">{contact.name}</span>
-                        {contact.isWhatsApp && (
-                          <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full">
-                            WhatsApp
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {contact.isAI ? 'Assistente Virtual' : contact.phone}
-                        {contact.isWhatsApp && contact.instanceName && (
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            • {contact.instanceName}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </Card>
-              ))
-            )}
-          </div>
-        </ScrollArea>
-      </div>
-
-      {/* Área de Chat */}
-      <div className="flex-1 flex flex-col">
-        {selectedContact ? (
-          <>
-            {/* Header do Chat */}
-            <div className="h-16 border-b border-border px-6 flex items-center justify-between bg-card">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-primary flex items-center justify-center text-white font-bold">
-                  {selectedContact.name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <h3 className="font-semibold">{selectedContact.name}</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedContact.isAI ? 'Assistente Virtual' : selectedContact.phone}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Área de Mensagens */}
-            <ScrollArea className="flex-1 p-6 bg-muted/20" ref={scrollAreaRef}>
-              <div className="space-y-4 mb-4">
-                {chatMessages.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <MessageCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>Inicie uma conversa enviando uma mensagem</p>
-                  </div>
-                ) : (
-                  chatMessages.map((msg) => (
-                    <div key={msg.id} className={`flex ${msg.sender_type === 'agent' ? "justify-end" : "justify-start"}`}>
-                      <div className={`flex gap-3 max-w-[70%] ${msg.sender_type === 'agent' ? "flex-row-reverse" : ""}`}>
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
-                          {msg.sender_type === 'ai' ? (
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                              <Bot className="w-4 h-4 text-primary" />
-                            </div>
-                          ) : msg.sender_type === 'agent' ? (
-                            <div className="w-8 h-8 rounded-full bg-gradient-secondary flex items-center justify-center text-white text-sm font-bold">
-                              A
-                            </div>
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                              <User className="w-4 h-4" />
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <div className={`rounded-2xl px-4 py-2 ${
-                            msg.sender_type === 'agent' 
-                              ? "bg-primary text-primary-foreground" 
-                              : "bg-card text-foreground"
-                          }`}>
-                            <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                          </div>
-                          <span className="text-xs text-muted-foreground mt-1 block px-2">
-                            {new Date(msg.created_at).toLocaleTimeString('pt-BR', { 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
-                            })}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-
-            {/* Input de Mensagem */}
-            <div className="border-t border-border p-4 bg-card space-y-3">
-              <div className="flex items-center gap-3">
-                <Input 
-                  placeholder="Digite sua mensagem..." 
-                  value={message} 
-                  onChange={(e) => setMessage(e.target.value)} 
-                  onKeyPress={(e) => e.key === "Enter" && handleSend()} 
-                  className="flex-1" 
-                  disabled={isSending} 
-                />
-                <Button 
-                  onClick={handleSend} 
-                  className="bg-gradient-primary" 
-                  disabled={isSending}
-                >
-                  {isSending ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Send className="w-5 h-5" />
-                  )}
-                </Button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <MessageCircle className="w-16 h-16 mx-auto mb-4 opacity-50" />
-              <p>Selecione um contato para iniciar uma conversa</p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
