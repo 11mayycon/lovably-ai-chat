@@ -271,6 +271,57 @@ const WhatsAppConnection: React.FC = () => {
     }
   };
 
+  const confirmAlreadyConnected = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      let instanceName = currentInstance;
+      if (!instanceName) {
+        if (!user?.email) {
+          setError('Email do usuário não encontrado');
+          return;
+        }
+        const username = extractUsernameFromEmail(user.email);
+        instanceName = `${username}_whatsapp`;
+        setCurrentInstance(instanceName);
+      }
+
+      console.log('Confirmando conexão manualmente para:', instanceName);
+      const { data, error } = await supabase.functions.invoke('check-whatsapp-status', {
+        body: { instanceName }
+      });
+
+      if (error) throw error;
+
+      const instanceState = data?.data?.instance?.state || data?.instance?.state;
+      const mappedStatus = data?.data?.status || data?.status;
+      console.log('Confirmação manual - state:', instanceState, 'mapped:', mappedStatus);
+
+      if (instanceState === 'open' || mappedStatus === 'connected') {
+        await db.updateInstance(instanceName!, { status: 'connected' });
+        setShowQrCode(false);
+        setQrCode(null);
+        setIsPolling(false);
+        await loadConnections();
+        console.log('✅ Conexão confirmada manualmente.');
+        try {
+          // Opcional: força sincronização/consulta do backend para refletir no painel
+          await supabase.functions.invoke('get-connected-whatsapp-instance');
+        } catch (syncErr) {
+          console.log('Sync opcional falhou ou não necessária:', syncErr);
+        }
+      } else {
+        setError('Ainda não conectado. Continue aguardando e tente novamente.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao confirmar conexão:', err);
+      setError(err.message || 'Erro ao confirmar conexão');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-background via-background to-accent/5">
       <div className="w-full max-w-2xl">
@@ -368,15 +419,24 @@ const WhatsAppConnection: React.FC = () => {
                         </div>
                       )}
 
-                      <button
-                        onClick={() => {
-                          setShowQrCode(false);
-                          setQrCode(null);
-                        }}
-                        className="w-full px-4 py-3 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-xl font-medium transition-colors"
-                      >
-                        Cancelar
-                      </button>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button
+                          onClick={confirmAlreadyConnected}
+                          disabled={loading}
+                          className="w-full px-4 py-3 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 disabled:from-muted disabled:to-muted text-primary-foreground rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl"
+                        >
+                          {loading ? 'Verificando...' : 'Já conectei'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowQrCode(false);
+                            setQrCode(null);
+                          }}
+                          className="w-full px-4 py-3 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-xl font-medium transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
                     </div>
                   </>
                 ) : (
