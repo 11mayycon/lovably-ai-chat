@@ -64,12 +64,21 @@ Deno.serve(async (req) => {
     }
 
     const evolutionData = await evolutionResponse.json()
-    console.log('QR code obtido com sucesso')
+    console.log('QR code obtido:', { hasBase64: !!evolutionData?.base64, hasCode: !!evolutionData?.code })
+
+    // Garantir que o base64 tenha o prefixo correto
+    let base64Image = evolutionData?.base64 || '';
+    if (base64Image && !base64Image.startsWith('data:image/')) {
+      base64Image = `data:image/png;base64,${base64Image}`;
+    }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        data: evolutionData 
+        data: {
+          base64: base64Image,
+          code: evolutionData?.code || ''
+        }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

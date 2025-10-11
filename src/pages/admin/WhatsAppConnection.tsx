@@ -105,10 +105,24 @@ const WhatsAppConnection: React.FC = () => {
         body: { instanceName }
       });
 
-      console.log('Resposta da criação:', createResult);
+      console.log('Resposta da criação:', createResult, 'Erro:', createError);
 
       if (createError || !createResult?.success) {
         throw new Error(createResult?.error || createError?.message || 'Erro ao criar instância');
+      }
+
+      // Se a resposta já contém o QR code, usar diretamente
+      if (createResult?.qrCode?.base64) {
+        let base64Image = createResult.qrCode.base64;
+        if (!base64Image.startsWith('data:image/')) {
+          base64Image = `data:image/png;base64,${base64Image}`;
+        }
+        console.log('QR Code recebido na criação:', base64Image.substring(0, 50) + '...');
+        setQrCode(base64Image);
+        setShowQrCode(true);
+        startStatusPolling(instanceName);
+        await loadConnections();
+        return;
       }
 
       // Aguardar um pouco e buscar QR code
@@ -133,18 +147,30 @@ const WhatsAppConnection: React.FC = () => {
       setLoading(true);
       setCurrentInstance(instance);
       
-      const { data: qrData, error: qrError } = await supabase.functions.invoke('get-whatsapp-qrcode', {
+      const { data: response, error: qrError } = await supabase.functions.invoke('get-whatsapp-qrcode', {
         body: { instanceName: instance }
       });
 
+      console.log('Resposta QR Code:', response);
+
       if (qrError) throw qrError;
 
+      // A resposta vem como { success: true, data: { base64: "...", code: "..." } }
+      const qrData = response?.data;
+      
       if (qrData?.base64) {
-        setQrCode(qrData.base64);
+        // Garantir que o base64 tem o prefixo correto
+        let base64Image = qrData.base64;
+        if (!base64Image.startsWith('data:image/')) {
+          base64Image = `data:image/png;base64,${base64Image}`;
+        }
+        console.log('QR Code configurado:', base64Image.substring(0, 50) + '...');
+        setQrCode(base64Image);
         setShowQrCode(true);
         startStatusPolling(instance);
       } else {
-        setError('QR Code não disponível');
+        console.error('QR Code não encontrado na resposta:', response);
+        setError('QR Code não disponível. Tente novamente.');
       }
     } catch (error: any) {
       console.error('Erro ao buscar QR code:', error);
@@ -294,62 +320,53 @@ const WhatsAppConnection: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                {qrCode && (
+                {qrCode ? (
                   <>
-                    <div className="flex justify-center">
-                      <img
-                        src={qrCode}
-                        alt="QR Code WhatsApp"
-                        className="w-64 h-64 block"
-                        style={{ 
-                          backgroundColor: 'white',
-                          border: '2px solid #e5e7eb',
-                          borderRadius: '8px',
-                          padding: '8px'
-                        }}
-                      />
+                    <div className="flex justify-center py-8">
+                      <div className="bg-white p-4 rounded-2xl shadow-xl border-2 border-primary/20">
+                        <img
+                          src={qrCode}
+                          alt="QR Code WhatsApp"
+                          className="w-80 h-80 block"
+                          onError={(e) => {
+                            console.error('Erro ao carregar imagem QR Code');
+                            setError('Erro ao exibir QR Code. A imagem pode estar corrompida.');
+                          }}
+                          onLoad={() => console.log('QR Code carregado com sucesso')}
+                        />
+                      </div>
                     </div>
 
-                    <div className="text-center space-y-3">
-                      <h3 className="text-lg font-semibold text-foreground">
-                        Escaneie o QR Code
+                    <div className="text-center space-y-4">
+                      <h3 className="text-xl font-bold text-foreground">
+                        Escaneie com seu WhatsApp
                       </h3>
-                      <ol className="text-sm text-muted-foreground space-y-2 text-left max-w-md mx-auto">
-                        <li className="flex items-start gap-2">
-                          <span className="flex-shrink-0 w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                          <span>Abra o WhatsApp no seu celular</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <span className="flex-shrink-0 w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                          <span>Toque em Menu ou Configurações</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <span className="flex-shrink-0 w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                          <span>Selecione "Aparelhos conectados"</span>
-                        </li>
-                        <li className="flex items-start gap-2">
-                          <span className="flex-shrink-0 w-6 h-6 bg-primary/20 text-primary rounded-full flex items-center justify-center text-xs font-bold">4</span>
-                          <span>Escaneie este QR Code</span>
-                        </li>
-                      </ol>
 
                       {isPolling && (
-                        <div className="flex items-center justify-center gap-2 text-primary animate-pulse pt-4">
+                        <div className="flex items-center justify-center gap-2 text-primary animate-pulse">
                           <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                           <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                           <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                           <span className="ml-2 font-medium">Aguardando conexão...</span>
                         </div>
                       )}
-                    </div>
 
-                    <button
-                      onClick={() => setShowQrCode(false)}
-                      className="w-full px-4 py-3 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-xl font-medium transition-colors"
-                    >
-                      Cancelar
-                    </button>
+                      <button
+                        onClick={() => {
+                          setShowQrCode(false);
+                          setQrCode(null);
+                        }}
+                        className="w-full px-4 py-3 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-xl font-medium transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="animate-spin w-12 h-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Carregando QR Code...</p>
+                  </div>
                 )}
               </div>
             )}

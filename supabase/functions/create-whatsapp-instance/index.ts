@@ -93,10 +93,22 @@ Deno.serve(async (req) => {
       })
 
       if (qrResponse.ok) {
-        qrCodeData = await qrResponse.json()
-        console.log('QR code obtido com sucesso')
+        const rawQrData = await qrResponse.json()
+        console.log('QR code obtido:', { hasBase64: !!rawQrData?.base64, hasCode: !!rawQrData?.code })
+        
+        // Garantir que o base64 tenha o prefixo correto
+        if (rawQrData?.base64) {
+          let base64Image = rawQrData.base64;
+          if (!base64Image.startsWith('data:image/')) {
+            base64Image = `data:image/png;base64,${base64Image}`;
+          }
+          qrCodeData = {
+            base64: base64Image,
+            code: rawQrData.code || ''
+          }
+        }
       } else {
-        console.warn('QR code não disponível ainda')
+        console.warn('QR code não disponível ainda, status:', qrResponse.status)
       }
     } catch (qrError) {
       console.warn('Erro ao buscar QR code:', qrError)
