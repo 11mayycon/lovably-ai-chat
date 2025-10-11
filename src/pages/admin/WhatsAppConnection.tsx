@@ -89,16 +89,24 @@ const WhatsAppConnection: React.FC = () => {
       const instanceName = `${username}_whatsapp`;
       setCurrentInstance(instanceName);
       
-      console.log('Criando instância:', instanceName);
+      console.log('Gerando QR Code para instância:', instanceName);
+      
+      // Primeiro, tentar deletar instância existente (se houver)
+      try {
+        await supabase.functions.invoke('delete-whatsapp-instance', {
+          body: { instanceName }
+        });
+        await db.deleteInstance(instanceName);
+        console.log('Instância anterior deletada');
+      } catch (deleteError) {
+        console.log('Nenhuma instância anterior para deletar');
+      }
+
+      // Aguardar um pouco antes de criar nova instância
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Criar instância no banco local
-      try {
-        await db.createInstance(instanceName);
-      } catch (dbError: any) {
-        if (!dbError.message.includes('already exists')) {
-          throw dbError;
-        }
-      }
+      await db.createInstance(instanceName);
       
       // Criar instância via Edge Function
       const { data: createResult, error: createError } = await supabase.functions.invoke('create-whatsapp-instance', {
