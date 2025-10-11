@@ -192,6 +192,54 @@ class EvolutionApiService {
       };
     }
   }
+
+  // Get all chats from instance
+  async getChats(instanceName: string): Promise<any[]> {
+    try {
+      const data = await this.makeRequest(`/chat/findChats/${instanceName}`);
+      
+      // Retornar array de chats
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error('Error getting chats:', error);
+      return [];
+    }
+  }
+
+  // Send text message
+  async sendTextMessage(instanceName: string, number: string, text: string): Promise<EvolutionApiResponse> {
+    try {
+      const data = await this.makeRequest(`/message/sendText/${instanceName}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          number: number.replace(/\D/g, ''), // Remove non-digits
+          text
+        }),
+      });
+
+      return {
+        success: true,
+        data
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to send message'
+      };
+    }
+  }
+
+  // Get messages from a chat
+  async getMessages(instanceName: string, remoteJid: string): Promise<any[]> {
+    try {
+      const data = await this.makeRequest(`/chat/fetchMessages/${instanceName}?remoteJid=${remoteJid}`);
+      
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error('Error getting messages:', error);
+      return [];
+    }
+  }
 }
 
 export const evolutionApi = new EvolutionApiService();

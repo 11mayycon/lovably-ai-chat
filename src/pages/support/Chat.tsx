@@ -21,6 +21,7 @@ const Chat = () => {
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [supportUser, setSupportUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingContacts, setLoadingContacts] = useState(false);
   const scrollAreaRef = useRef<any>(null);
 
   useEffect(() => {
@@ -30,6 +31,15 @@ const Chat = () => {
   useEffect(() => {
     if (selectedContact) {
       loadMessages();
+      
+      // Polling para atualizar mensagens em tempo real (a cada 5 segundos)
+      const interval = setInterval(() => {
+        if (selectedContact?.isWhatsApp) {
+          loadMessages();
+        }
+      }, 5000);
+      
+      return () => clearInterval(interval);
     }
   }, [selectedContact]);
 
@@ -57,7 +67,14 @@ const Chat = () => {
       // Carregar contatos do WhatsApp
       await loadWhatsAppContacts();
       
+      // Polling para atualizar contatos em tempo real (a cada 10 segundos)
+      const interval = setInterval(() => {
+        loadWhatsAppContacts();
+      }, 10000);
+      
       setLoading(false);
+      
+      return () => clearInterval(interval);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
       toast.error("Erro ao carregar dados do usuário");
@@ -67,6 +84,7 @@ const Chat = () => {
 
   const loadWhatsAppContacts = async () => {
     try {
+      setLoadingContacts(true);
       console.log('Carregando contatos do WhatsApp...');
 
       const { data: { session } } = await supabase.auth.getSession();
@@ -156,6 +174,8 @@ const Chat = () => {
         isWhatsApp: false
       };
       setWhatsappContacts([inovaproContact]);
+    } finally {
+      setLoadingContacts(false);
     }
   };
 
@@ -197,26 +217,33 @@ const Chat = () => {
       }
       const instanceName = instanceResp.instance.instance_name || instanceResp.instance.instanceName;
 
-      // 2) Buscar contatos da Evolution dessa instância
-      const { data: contactsResp, error: contactsErr } = await supabase.functions.invoke('get-whatsapp-contacts', {
+      // 2) Buscar chats da Evolution (em vez de contatos simples)
+      console.log('Buscando chats da instância:', instanceName);
+      const { data: chatsResp, error: chatsErr } = await supabase.functions.invoke('get-whatsapp-chats', {
         body: { instanceName },
       });
-      if (contactsErr || !contactsResp?.success) {
-        console.error('Erro ao buscar contatos na Evolution:', contactsErr || contactsResp);
+      
+      if (chatsErr || !chatsResp?.success) {
+        console.error('Erro ao buscar chats na Evolution:', chatsErr || chatsResp);
         return [] as any[];
       }
 
-      const contacts = (contactsResp.contacts || []).map((c: any) => ({
-        id: c.id || c.phone,
-        name: c.name || c.phone,
-        phone: c.phone,
-        profilePicUrl: c.profilePicUrl || null,
-        isGroup: Boolean(c.isGroup),
+      console.log('Chats recebidos:', chatsResp.chats?.length || 0);
+
+      const contacts = (chatsResp.chats || []).map((chat: any) => ({
+        id: chat.id,
+        name: chat.name,
+        phone: chat.id.replace('@s.whatsapp.net', '').replace('@g.us', ''),
+        profilePicUrl: chat.profilePicUrl || null,
+        isGroup: chat.id.includes('@g.us'),
         isWhatsApp: true,
         isAI: false,
-        lastSeen: c.lastSeen || null,
+        lastSeen: chat.lastMessageTimestamp,
+        lastMessage: chat.lastMessage,
+        unreadCount: chat.unreadCount || 0,
         instanceName,
       }));
+      
       return contacts;
     } catch (e) {
       console.error('Falha ao carregar contatos da Evolution:', e);
@@ -238,10 +265,30 @@ const Chat = () => {
         return;
       }
 
-      // Para contatos do WhatsApp, carregar mensagens via API local
-      if (selectedContact.isWhatsApp) {
-        const messages = await databaseClient.getWhatsAppMessages(selectedContact.id);
-        setChatMessages(messages);
+      // Para contatos do WhatsApp, carregar mensagens via Evolution API
+      if (selectedContact.isWhatsApp && selectedContact.instanceName) {
+        console.log('Carregando mensagens do WhatsApp para:', selectedContact.id);
+        
+        const { data: messagesResp, error } = await supabase.functions.invoke('get-whatsapp-messages', {
+          body: { 
+            instanceName: selectedContact.instanceName,
+            remoteJid: selectedContact.id 
+          },
+        });
+
+        if (error) {
+          console.error('Erro ao carregar mensagens do WhatsApp:', error);
+          setChatMessages([]);
+          return;
+        }
+
+        if (messagesResp?.success && messagesResp?.messages) {
+          console.log('Mensagens carregadas:', messagesResp.messages.length);
+          setChatMessages(messagesResp.messages);
+        } else {
+          console.log('Nenhuma mensagem encontrada');
+          setChatMessages([]);
+        }
         return;
       }
 
@@ -296,18 +343,23 @@ const Chat = () => {
 
       // Para contatos do WhatsApp
       if (selectedContact.isWhatsApp) {
-        // Enviar mensagem via Evolution API
+        // Enviar mensagem via Evolution API usando o phone formatado
+        const phoneNumber = selectedContact.phone.replace(/\D/g, ''); // Remove caracteres não numéricos
+        const remoteJid = selectedContact.id; // Usar o ID completo com @s.whatsapp.net
+        
+        console.log('Enviando mensagem para:', { phoneNumber, remoteJid, instanceName: selectedContact.instanceName });
+        
         const result = await whatsappService.sendMessage(
           selectedContact.instanceName,
-          selectedContact.phone,
+          phoneNumber,
           message
         );
 
         if (result.success) {
-          // Também salvar no banco local
-          await databaseClient.sendWhatsAppMessage(selectedContact.id, message);
           setMessage('');
           toast.success('Mensagem enviada via WhatsApp');
+          // Recarregar mensagens após envio
+          await loadMessages();
         } else {
           throw new Error(result.error || 'Falha ao enviar mensagem via WhatsApp');
         }
@@ -350,9 +402,12 @@ const Chat = () => {
           <div className="p-4 border-b border-border">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-lg">Contatos</h2>
-              <Button variant="ghost" size="sm" onClick={() => navigate("/support-login")}>
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
+              <div className="flex items-center gap-2">
+                {loadingContacts && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
+                <Button variant="ghost" size="sm" onClick={() => navigate("/support-login")}>
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
             {supportUser && (
               <div className="text-sm text-muted-foreground mb-3">
@@ -383,6 +438,12 @@ const Chat = () => {
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 relative">
                         {contact.isAI ? (
                           <BrainCircuit className="w-5 h-5 text-primary" />
+                        ) : contact.profilePicUrl ? (
+                          <img 
+                            src={contact.profilePicUrl} 
+                            alt={contact.name}
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
                         ) : contact.isWhatsApp ? (
                           <>
                             <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
@@ -402,14 +463,14 @@ const Chat = () => {
                               WhatsApp
                             </span>
                           )}
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {contact.isAI ? 'Assistente Virtual' : contact.phone}
-                          {contact.isWhatsApp && contact.instanceName && (
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              • {contact.instanceName}
+                          {contact.unreadCount > 0 && (
+                            <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+                              {contact.unreadCount}
                             </span>
                           )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {contact.isAI ? 'Assistente Virtual' : contact.lastMessage || contact.phone}
                         </p>
                       </div>
                     </div>
