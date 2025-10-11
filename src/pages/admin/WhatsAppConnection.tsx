@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db, WhatsAppInstance } from '../../lib/database';
-import { evolutionApi } from '../../lib/evolutionApi';
+import { supabase } from '@/integrations/supabase/client';
 
 const WhatsAppConnection: React.FC = () => {
   const { user } = useAuth();
@@ -44,7 +44,13 @@ const WhatsAppConnection: React.FC = () => {
     setIsPolling(true);
     const pollInterval = setInterval(async () => {
       try {
-        const status = await evolutionApi.getInstanceStatus(instanceName);
+        const { data, error } = await supabase.functions.invoke('check-whatsapp-status', {
+          body: { instanceName }
+        });
+
+        if (error) throw error;
+
+        const status = data?.status || 'disconnected';
 
         if (status === 'open' || status === 'connected') {
           clearInterval(pollInterval);
@@ -94,13 +100,15 @@ const WhatsAppConnection: React.FC = () => {
         }
       }
       
-      // Criar instância via Evolution API
-      const createResult = await evolutionApi.createInstance(instanceName);
+      // Criar instância via Edge Function
+      const { data: createResult, error: createError } = await supabase.functions.invoke('create-whatsapp-instance', {
+        body: { instanceName }
+      });
 
       console.log('Resposta da criação:', createResult);
 
-      if (!createResult.success) {
-        throw new Error(createResult.error || 'Erro ao criar instância');
+      if (createError || !createResult?.success) {
+        throw new Error(createResult?.error || createError?.message || 'Erro ao criar instância');
       }
 
       // Aguardar um pouco e buscar QR code
@@ -125,7 +133,11 @@ const WhatsAppConnection: React.FC = () => {
       setLoading(true);
       setCurrentInstance(instance);
       
-      const qrData = await evolutionApi.getQRCode(instance);
+      const { data: qrData, error: qrError } = await supabase.functions.invoke('get-whatsapp-qrcode', {
+        body: { instanceName: instance }
+      });
+
+      if (qrError) throw qrError;
 
       if (qrData?.base64) {
         setQrCode(qrData.base64);
@@ -150,14 +162,16 @@ const WhatsAppConnection: React.FC = () => {
     try {
       setLoading(true);
       
-      const result = await evolutionApi.deleteInstance(instance);
+      const { data: result, error: deleteError } = await supabase.functions.invoke('delete-whatsapp-instance', {
+        body: { instanceName: instance }
+      });
 
-      if (result.success) {
-        await db.deleteInstance(instance);
-        await loadConnections();
-      } else {
-        setError(result.error || 'Erro ao deletar instância');
+      if (deleteError || !result?.success) {
+        throw new Error(result?.error || deleteError?.message || 'Erro ao deletar instância');
       }
+
+      await db.deleteInstance(instance);
+      await loadConnections();
     } catch (error: any) {
       console.error('Erro ao deletar instância:', error);
       setError(error.message || 'Erro ao deletar instância');
@@ -174,10 +188,12 @@ const WhatsAppConnection: React.FC = () => {
       await deleteInstance(instance);
       
       setTimeout(async () => {
-        const result = await evolutionApi.createInstance(instance);
+        const { data: result, error: createError } = await supabase.functions.invoke('create-whatsapp-instance', {
+          body: { instanceName: instance }
+        });
 
-        if (!result.success) {
-          throw new Error(result.error || 'Erro ao recriar instância');
+        if (createError || !result?.success) {
+          throw new Error(result?.error || createError?.message || 'Erro ao recriar instância');
         }
         
         await loadConnections();
@@ -194,14 +210,16 @@ const WhatsAppConnection: React.FC = () => {
     try {
       setLoading(true);
       
-      const result = await evolutionApi.logoutInstance(instance);
+      const { data: result, error: logoutError } = await supabase.functions.invoke('logout-whatsapp-instance', {
+        body: { instanceName: instance }
+      });
 
-      if (result.success) {
-        await db.updateInstance(instance, { status: 'disconnected' });
-        await loadConnections();
-      } else {
-        setError(result.error || 'Erro ao desconectar instância');
+      if (logoutError || !result?.success) {
+        throw new Error(result?.error || logoutError?.message || 'Erro ao desconectar instância');
       }
+
+      await db.updateInstance(instance, { status: 'disconnected' });
+      await loadConnections();
     } catch (error: any) {
       console.error('Erro ao desconectar instância:', error);
       setError(error.message || 'Erro ao desconectar instância');
