@@ -67,8 +67,13 @@ const Chat = () => {
 
   const loadWhatsAppContacts = async () => {
     try {
+      console.log('Carregando contatos do WhatsApp...');
+      
       // Primeiro sincronizar contatos do WhatsApp
       await syncWhatsAppContacts();
+
+      // Aguardar um pouco para garantir que os dados foram salvos
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Depois carregar contatos do banco
       const { data: whatsappContactsData, error } = await supabase
@@ -137,14 +142,26 @@ const Chat = () => {
 
   const syncWhatsAppContacts = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('sync-whatsapp-contacts');
+      console.log('Iniciando sincronização de contatos do WhatsApp...');
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.error('Usuário não autenticado');
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('sync-whatsapp-contacts', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
       
       if (error) {
         console.error('Erro ao sincronizar contatos:', error);
         return;
       }
 
-      console.log('Contatos sincronizados:', data);
+      console.log('Contatos sincronizados com sucesso:', data);
     } catch (error) {
       console.error('Erro ao sincronizar contatos:', error);
     }
