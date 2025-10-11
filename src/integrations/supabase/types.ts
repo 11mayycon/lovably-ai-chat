@@ -473,6 +473,53 @@ export type Database = {
           },
         ]
       }
+      whatsapp_contacts: {
+        Row: {
+          contact_name: string
+          contact_phone: string
+          created_at: string | null
+          id: string
+          is_group: boolean | null
+          last_message_at: string | null
+          profile_pic_url: string | null
+          unread_count: number | null
+          updated_at: string | null
+          whatsapp_connection_id: string | null
+        }
+        Insert: {
+          contact_name: string
+          contact_phone: string
+          created_at?: string | null
+          id?: string
+          is_group?: boolean | null
+          last_message_at?: string | null
+          profile_pic_url?: string | null
+          unread_count?: number | null
+          updated_at?: string | null
+          whatsapp_connection_id?: string | null
+        }
+        Update: {
+          contact_name?: string
+          contact_phone?: string
+          created_at?: string | null
+          id?: string
+          is_group?: boolean | null
+          last_message_at?: string | null
+          profile_pic_url?: string | null
+          unread_count?: number | null
+          updated_at?: string | null
+          whatsapp_connection_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_contacts_whatsapp_connection_id_fkey"
+            columns: ["whatsapp_connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

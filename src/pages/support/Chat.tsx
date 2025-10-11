@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { databaseClient } from "@/lib/database-client";
 import { whatsappService } from "@/lib/whatsapp-service";
+import { supabase } from "@/integrations/supabase/client";
 
 const Chat = () => {
   const navigate = useNavigate();
@@ -65,9 +66,27 @@ const Chat = () => {
 
   const loadWhatsAppContacts = async () => {
     try {
-      // Tentar carregar contatos do WhatsApp via API local
-      const whatsappContactsData = await databaseClient.getWhatsAppContacts();
-      
+      // Primeiro sincronizar contatos do WhatsApp
+      await syncWhatsAppContacts();
+
+      // Depois carregar contatos do banco
+      const { data: whatsappContactsData, error } = await supabase
+        .from('whatsapp_contacts')
+        .select(`
+          *,
+          whatsapp_connections!inner(
+            instance_name,
+            status
+          )
+        `)
+        .eq('whatsapp_connections.status', 'connected')
+        .order('last_message_at', { ascending: false, nullsFirst: false });
+
+      if (error) {
+        console.error("Erro ao carregar contatos:", error);
+        throw error;
+      }
+
       // Adicionar contato fixo do INOVAPRO AI
       const inovaproContact = {
         id: "groq-ai",
@@ -80,9 +99,24 @@ const Chat = () => {
         isWhatsApp: false
       };
 
-      // Combinar contatos do WhatsApp com o contato AI
-      const allContacts = [inovaproContact, ...whatsappContactsData];
+      // Transformar e combinar contatos
+      const mappedContacts = (whatsappContactsData || []).map((contact: any) => ({
+        id: contact.id,
+        name: contact.contact_name,
+        phone: contact.contact_phone,
+        profilePicUrl: contact.profile_pic_url,
+        isGroup: contact.is_group,
+        isWhatsApp: true,
+        lastSeen: contact.last_message_at,
+        instanceName: contact.whatsapp_connections.instance_name,
+        whatsappConnectionId: contact.whatsapp_connection_id,
+        isAI: false,
+      }));
+
+      const allContacts = [inovaproContact, ...mappedContacts];
       setWhatsappContacts(allContacts);
+      
+      console.log(`Carregados ${mappedContacts.length} contatos do WhatsApp`);
     } catch (error) {
       console.error("Erro ao carregar contatos:", error);
       // Em caso de erro, adicionar apenas o contato do INOVAPRO AI
@@ -97,6 +131,21 @@ const Chat = () => {
         isWhatsApp: false
       };
       setWhatsappContacts([inovaproContact]);
+    }
+  };
+
+  const syncWhatsAppContacts = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-whatsapp-contacts');
+      
+      if (error) {
+        console.error('Erro ao sincronizar contatos:', error);
+        return;
+      }
+
+      console.log('Contatos sincronizados:', data);
+    } catch (error) {
+      console.error('Erro ao sincronizar contatos:', error);
     }
   };
 
