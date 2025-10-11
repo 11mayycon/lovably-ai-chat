@@ -331,7 +331,7 @@ const WhatsAppConnection: React.FC = () => {
                 {qrCode ? (
                   <>
                     <div className="flex justify-center py-8">
-                      <div className="bg-white p-4 rounded-2xl shadow-xl border-2 border-primary/20">
+                      <div className="bg-background p-6 rounded-2xl shadow-xl border-2 border-primary/20">
                         <img
                           src={qrCode}
                           alt="QR Code WhatsApp"
