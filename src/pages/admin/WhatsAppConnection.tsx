@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db, WhatsAppInstance } from '../../lib/database';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 const WhatsAppConnection: React.FC = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [connections, setConnections] = useState<WhatsAppInstance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -252,20 +254,40 @@ const WhatsAppConnection: React.FC = () => {
   const logoutInstance = async (instance: string) => {
     try {
       setLoading(true);
+      setError(null);
       
-      const { data: result, error: logoutError } = await supabase.functions.invoke('logout-whatsapp-instance', {
+      // Deletar a instância da Evolution API
+      const { data: result, error: deleteError } = await supabase.functions.invoke('delete-whatsapp-instance', {
         body: { instanceName: instance }
       });
 
-      if (logoutError || !result?.success) {
-        throw new Error(result?.error || logoutError?.message || 'Erro ao desconectar instância');
+      if (deleteError || !result?.success) {
+        throw new Error(result?.error || deleteError?.message || 'Erro ao excluir instância');
       }
 
-      await db.updateInstance(instance, { status: 'disconnected' });
+      // Remover do banco de dados local
+      await db.deleteInstance(instance);
+      
+      // Limpar estados para mostrar botão de QR code novamente
+      setQrCode(null);
+      setShowQrCode(false);
+      setCurrentInstance(null);
+      setIsPolling(false);
+      
+      toast({
+        title: "Sucesso",
+        description: "WhatsApp desconectado com sucesso",
+      });
+      
       await loadConnections();
     } catch (error: any) {
       console.error('Erro ao desconectar instância:', error);
       setError(error.message || 'Erro ao desconectar instância');
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao desconectar instância",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
