@@ -22,6 +22,7 @@ const Chat = () => {
   const [supportUser, setSupportUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [loadingContacts, setLoadingContacts] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
   const scrollAreaRef = useRef<any>(null);
 
   useEffect(() => {
@@ -82,12 +83,50 @@ const Chat = () => {
     }
   };
 
+  // Verificar status da conexão
+  const checkConnectionStatus = async (instanceName: string) => {
+    try {
+      setConnectionStatus('checking');
+      const { data, error } = await supabase.functions.invoke('check-connection-status', {
+        body: { instanceName }
+      });
+      
+      if (error || !data?.success) {
+        console.error('Erro ao verificar status da conexão:', error);
+        setConnectionStatus('disconnected');
+        return false;
+      }
+      
+      const isConnected = data.connected;
+      setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+      return isConnected;
+    } catch (error) {
+      console.error('Erro ao verificar status da conexão:', error);
+      setConnectionStatus('disconnected');
+      return false;
+    }
+  };
+
   const loadWhatsAppContacts = async () => {
     try {
       setLoadingContacts(true);
       console.log('Carregando contatos do WhatsApp...');
 
       const { data: { session } } = await supabase.auth.getSession();
+      
+      // Verificar status da conexão primeiro
+      const instanceResp = await supabase.functions.invoke('get-connected-whatsapp-instance');
+      if (instanceResp.data?.instance) {
+        const instanceName = instanceResp.data.instance.instance_name || instanceResp.data.instance.instanceName;
+        const isConnected = await checkConnectionStatus(instanceName);
+        
+        if (!isConnected) {
+          toast.error('⚠️ WhatsApp desconectado — reconecte sua instância no painel administrativo.');
+          setLoadingContacts(false);
+          return;
+        }
+      }
+      
       if (!session) {
         // Sem sessão autenticada (fluxo de Suporte): buscar diretamente na Evolution API
         const evoContacts = await fetchContactsFromEvolution();
@@ -399,6 +438,25 @@ const Chat = () => {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar de Contatos */}
         <div className="w-96 border-r border-border bg-card flex flex-col">
+          {/* Status da conexão */}
+          {connectionStatus === 'disconnected' && (
+            <div className="p-3 bg-destructive/10 border-b border-destructive/20">
+              <div className="flex items-center gap-2 text-destructive text-sm">
+                <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                <span>WhatsApp desconectado</span>
+              </div>
+            </div>
+          )}
+          
+          {connectionStatus === 'connected' && (
+            <div className="p-3 bg-green-500/10 border-b border-green-500/20">
+              <div className="flex items-center gap-2 text-green-600 text-sm">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <span>WhatsApp conectado</span>
+              </div>
+            </div>
+          )}
+          
           <div className="p-4 border-b border-border">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold text-lg">Contatos</h2>

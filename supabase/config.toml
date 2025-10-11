@@ -76,6 +76,9 @@ verify_jwt = false
 [functions.get-whatsapp-messages]
 verify_jwt = false
 
+[functions.check-connection-status]
+verify_jwt = false
+
 # Keep sync protected (admin-side)
 [functions.sync-whatsapp-contacts]
 verify_jwt = true
