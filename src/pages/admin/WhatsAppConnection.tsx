@@ -345,17 +345,53 @@ const WhatsAppConnection: React.FC = () => {
               </div>
             )}
 
-            {/* Conectado */}
-            {connections.some((c) => c.status === 'connected') && (
-              <div className="bg-primary/10 border border-primary/20 text-primary px-4 py-3 rounded-xl backdrop-blur-sm animate-in fade-in slide-in-from-top-2">
-                <p className="text-sm font-medium">
-                  Conectado: {connections.find((c) => c.status === 'connected')?.instance_name}
-                </p>
-              </div>
-            )}
+            {/* Verificar se está conectado */}
+            {!showQrCode && connections.some((c) => c.status === 'connected') ? (
+              // Cartão "Conectado" com ações
+              <div className="text-center space-y-6 py-12 animate-in fade-in slide-in-from-bottom-4">
+                <div className="w-24 h-24 mx-auto bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-full flex items-center justify-center border-2 border-green-500/40">
+                  <svg className="w-12 h-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                
+                <div>
+                  <h2 className="text-2xl font-bold text-foreground mb-2">
+                    ✅ WhatsApp Conectado
+                  </h2>
+                  <p className="text-muted-foreground text-sm mb-1">
+                    Instância: <span className="font-semibold text-foreground">{connections.find((c) => c.status === 'connected')?.instance_name}</span>
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    Sua conexão está ativa e funcionando
+                  </p>
+                </div>
 
-            {/* Status ou QR Code */}
-            {!showQrCode ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto">
+                  <button
+                    onClick={() => {
+                      const instance = connections.find((c) => c.status === 'connected')?.instance_name;
+                      if (instance) logoutInstance(instance);
+                    }}
+                    disabled={loading}
+                    className="px-6 py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 rounded-xl font-semibold transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-50"
+                  >
+                    Desconectar
+                  </button>
+                  <button
+                    onClick={() => {
+                      const instance = connections.find((c) => c.status === 'connected')?.instance_name;
+                      if (instance) restartInstance(instance);
+                    }}
+                    disabled={loading}
+                    className="px-6 py-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-600 dark:text-blue-400 rounded-xl font-semibold transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-50"
+                  >
+                    Reiniciar
+                  </button>
+                </div>
+              </div>
+            ) : !showQrCode ? (
+              // Estado inicial: Pronto para conectar
               <div className="text-center space-y-6 py-12">
                 <div className="w-24 h-24 mx-auto bg-gradient-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center">
                   <svg className="w-12 h-12 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
