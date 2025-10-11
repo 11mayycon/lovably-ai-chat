@@ -8,10 +8,10 @@ Deno.serve(async (req: Request) => {
   try {
     const { instanceName } = await req.json();
     
-    const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL');
-    const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
+    const EVO_BASE_URL = Deno.env.get('EVO_BASE_URL');
+    const EVO_API_KEY = Deno.env.get('EVO_API_KEY');
 
-    if (!evolutionApiUrl || !evolutionApiKey) {
+    if (!EVO_BASE_URL || !EVO_API_KEY) {
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -25,11 +25,11 @@ Deno.serve(async (req: Request) => {
     }
 
     // Buscar contatos da Evolution API
-    const response = await fetch(`${evolutionApiUrl}/chat/findContacts/${instanceName}`, {
+    const response = await fetch(`${EVO_BASE_URL}/chat/findContacts/${instanceName}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': evolutionApiKey,
+        'apikey': EVO_API_KEY,
       },
     });
 
@@ -40,17 +40,16 @@ Deno.serve(async (req: Request) => {
     const data = await response.json();
     
     // Filtrar e formatar contatos
-    const contacts = data
-      .filter((contact: any) => contact.id && contact.pushName)
+    const contacts = (Array.isArray(data) ? data : [])
       .map((contact: any) => ({
-        id: contact.id,
-        name: contact.pushName || contact.id,
-        phone: contact.id.replace('@s.whatsapp.net', ''),
-        profilePicUrl: contact.profilePicUrl || null,
-        isGroup: contact.id.includes('@g.us'),
-        lastSeen: contact.lastSeen || null
+        id: contact.id || contact.remoteJid,
+        name: contact.pushName || contact.name || contact.verifiedName || (contact.id || '').replace('@s.whatsapp.net', ''),
+        phone: (contact.id || contact.remoteJid || '').replace('@s.whatsapp.net', ''),
+        profilePicUrl: contact.profilePicUrl || contact.profilePictureUrl || null,
+        isGroup: String(contact.id || '').includes('@g.us'),
+        lastSeen: contact.lastSeen || null,
       }))
-      .slice(0, 50); // Limitar a 50 contatos
+      .slice(0, 200); // Limitar para segurança
 
     return new Response(
       JSON.stringify({ 

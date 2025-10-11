@@ -68,6 +68,25 @@ const Chat = () => {
   const loadWhatsAppContacts = async () => {
     try {
       console.log('Carregando contatos do WhatsApp...');
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        // Sem sessão autenticada (fluxo de Suporte): buscar diretamente na Evolution API
+        const evoContacts = await fetchContactsFromEvolution();
+        const inovaproContact = {
+          id: "groq-ai",
+          name: "🤖 INOVAPRO AI",
+          phone: "ai-assistant",
+          profilePicUrl: null,
+          isGroup: false,
+          isAI: true,
+          lastSeen: null,
+          isWhatsApp: false
+        };
+        setWhatsappContacts([inovaproContact, ...evoContacts]);
+        console.log(`Carregados ${evoContacts.length} contatos diretamente da Evolution`);
+        return;
+      }
       
       // Primeiro sincronizar contatos do WhatsApp
       await syncWhatsAppContacts();
@@ -164,6 +183,44 @@ const Chat = () => {
       console.log('Contatos sincronizados com sucesso:', data);
     } catch (error) {
       console.error('Erro ao sincronizar contatos:', error);
+    }
+  };
+
+  // Busca contatos diretamente da Evolution API quando não há sessão autenticada
+  const fetchContactsFromEvolution = async () => {
+    try {
+      // 1) Obter instância conectada
+      const { data: instanceResp, error: instErr } = await supabase.functions.invoke('get-connected-whatsapp-instance');
+      if (instErr || !instanceResp?.success || !instanceResp?.instance) {
+        console.error('Nenhuma instância conectada encontrada:', instErr || instanceResp);
+        return [] as any[];
+      }
+      const instanceName = instanceResp.instance.instance_name || instanceResp.instance.instanceName;
+
+      // 2) Buscar contatos da Evolution dessa instância
+      const { data: contactsResp, error: contactsErr } = await supabase.functions.invoke('get-whatsapp-contacts', {
+        body: { instanceName },
+      });
+      if (contactsErr || !contactsResp?.success) {
+        console.error('Erro ao buscar contatos na Evolution:', contactsErr || contactsResp);
+        return [] as any[];
+      }
+
+      const contacts = (contactsResp.contacts || []).map((c: any) => ({
+        id: c.id || c.phone,
+        name: c.name || c.phone,
+        phone: c.phone,
+        profilePicUrl: c.profilePicUrl || null,
+        isGroup: Boolean(c.isGroup),
+        isWhatsApp: true,
+        isAI: false,
+        lastSeen: c.lastSeen || null,
+        instanceName,
+      }));
+      return contacts;
+    } catch (e) {
+      console.error('Falha ao carregar contatos da Evolution:', e);
+      return [] as any[];
     }
   };
 

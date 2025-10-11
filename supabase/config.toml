@@ -1,4 +1,4 @@
-project_id = "tcswbkvsatskhaskwnit"
+project_id = "grlyhylqbekhrmfwgyme"
 
 [functions.create-first-admin]
 verify_jwt = false
@@ -61,4 +61,15 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.logout-whatsapp-instance]
+verify_jwt = true
+
+# Newly ensured public endpoints for support-side contact loading
+[functions.get-connected-whatsapp-instance]
+verify_jwt = false
+
+[functions.get-whatsapp-contacts]
+verify_jwt = false
+
+# Keep sync protected (admin-side)
+[functions.sync-whatsapp-contacts]
 verify_jwt = true
