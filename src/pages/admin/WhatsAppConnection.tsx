@@ -50,9 +50,16 @@ const WhatsAppConnection: React.FC = () => {
 
         if (error) throw error;
 
-        const status = data?.status || 'disconnected';
+        console.log('Status polling response:', data);
 
-        if (status === 'open' || status === 'connected') {
+        // Verificar tanto o status mapeado quanto o state da instância
+        const instanceState = data?.data?.instance?.state || data?.instance?.state;
+        const mappedStatus = data?.data?.status || data?.status;
+
+        console.log('Instance state:', instanceState, 'Mapped status:', mappedStatus);
+
+        // Considerar conectado se o state for 'open' OU o status mapeado for 'connected'
+        if (instanceState === 'open' || mappedStatus === 'connected') {
           clearInterval(pollInterval);
           setIsPolling(false);
           setShowQrCode(false);
@@ -61,6 +68,8 @@ const WhatsAppConnection: React.FC = () => {
           await db.updateInstance(instanceName, { status: 'connected' });
           await loadConnections();
           setError(null);
+          
+          console.log('✅ Conexão estabelecida com sucesso!');
         }
       } catch (err) {
         console.error('Erro no polling:', err);

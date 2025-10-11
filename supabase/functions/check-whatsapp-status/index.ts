@@ -66,15 +66,21 @@ Deno.serve(async (req) => {
     }
 
     const evolutionData = await evolutionResponse.json()
-    console.log('Status obtido:', evolutionData)
+    console.log('Status obtido da Evolution API:', JSON.stringify(evolutionData, null, 2))
 
     // Mapear status da Evolution API para nosso banco
     let status = 'disconnected'
-    if (evolutionData.state === 'open') {
+    const connectionState = evolutionData.state || evolutionData.instance?.state
+    
+    console.log('Connection state:', connectionState)
+    
+    if (connectionState === 'open') {
       status = 'connected'
-    } else if (evolutionData.state === 'connecting') {
+    } else if (connectionState === 'connecting') {
       status = 'connecting'
     }
+    
+    console.log('Status mapeado:', status)
 
     // Atualizar status no banco de dados
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
