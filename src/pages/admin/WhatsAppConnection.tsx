@@ -345,6 +345,15 @@ const WhatsAppConnection: React.FC = () => {
               </div>
             )}
 
+            {/* Conectado */}
+            {connections.some((c) => c.status === 'connected') && (
+              <div className="bg-primary/10 border border-primary/20 text-primary px-4 py-3 rounded-xl backdrop-blur-sm animate-in fade-in slide-in-from-top-2">
+                <p className="text-sm font-medium">
+                  Conectado: {connections.find((c) => c.status === 'connected')?.instance_name}
+                </p>
+              </div>
+            )}
+
             {/* Status ou QR Code */}
             {!showQrCode ? (
               <div className="text-center space-y-6 py-12">
