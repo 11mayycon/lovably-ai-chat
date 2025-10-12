@@ -41,6 +41,7 @@ const SupportLogin = () => {
 
       // Salvar informações na sessão
       sessionStorage.setItem("support_user", JSON.stringify(supportUser));
+      sessionStorage.setItem("support_rooms", JSON.stringify(rooms || []));
 
       toast.success(`Bem-vindo(a), ${supportUser.full_name}!`);
       navigate("/support/salas");

@@ -51,16 +51,49 @@ const SalasPage: React.FC = () => {
     setContacts([]);
 
     try {
-      const instanceName = 'default';
-      const apiKeyEvolution = import.meta.env.VITE_EVO_API_KEY as string;
+      const supportUserData = sessionStorage.getItem('support_user');
+      if (!supportUserData) {
+        setError('Sessão expirada. Faça login novamente.');
+        setIsLoading(false);
+        navigate('/support-login');
+        return;
+      }
 
-      if (!apiKeyEvolution) {
-        setError('Chave da API Evolution não configurada.');
+      const user = JSON.parse(supportUserData);
+      const rooms = JSON.parse(sessionStorage.getItem('support_rooms') || '[]');
+
+      if (!rooms || rooms.length === 0) {
+        setError('Nenhuma sala de atendimento encontrada. Entre em contato com o administrador.');
         setIsLoading(false);
         return;
       }
 
-      const statusResponse = await checkInstanceStatus(instanceName, apiKeyEvolution);
+      const adminOwnerId = rooms[0].admin_owner_id;
+
+      // Buscar dados do administrador no Supabase
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: adminData, error: adminError } = await supabase
+        .from('administrators')
+        .select('instance_name, api_key_evolution')
+        .eq('id', adminOwnerId)
+        .single();
+
+      if (adminError || !adminData) {
+        console.error('Erro ao buscar administrador:', adminError);
+        setError('Erro ao buscar dados do administrador.');
+        setIsLoading(false);
+        return;
+      }
+
+      const { instance_name, api_key_evolution } = adminData;
+
+      if (!instance_name || !api_key_evolution) {
+        setError('Instância WhatsApp não configurada. Entre em contato com o administrador.');
+        setIsLoading(false);
+        return;
+      }
+
+      const statusResponse = await checkInstanceStatus(instance_name, api_key_evolution);
 
       if (statusResponse.state !== 'open') {
         setError('Nenhuma conta WhatsApp está conectada. Informe o administrador responsável para realizar a conexão no painel de administração.');
@@ -68,7 +101,7 @@ const SalasPage: React.FC = () => {
         return;
       }
 
-      const contactsResponse = await getEvolutionContacts(instanceName, apiKeyEvolution);
+      const contactsResponse = await getEvolutionContacts(instance_name, api_key_evolution);
       
       if (Array.isArray(contactsResponse)) {
         setContacts(contactsResponse);
