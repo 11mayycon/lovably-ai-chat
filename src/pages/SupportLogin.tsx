@@ -43,7 +43,7 @@ const SupportLogin = () => {
       sessionStorage.setItem("support_user", JSON.stringify(supportUser));
 
       toast.success(`Bem-vindo(a), ${supportUser.full_name}!`);
-      navigate("/support/chat");
+      navigate("/support/salas");
     } catch (error) {
       console.error("Erro ao fazer login:", error);
       toast.error("Erro ao acessar o sistema");
