@@ -1,36 +1,37 @@
-import React, { useState } from 'react';
-import { supabasePublic as supabase } from '../../lib/supabase-public-client';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getEvolutionContacts } from '../../lib/getEvolutionContacts';
 import { checkInstanceStatus } from '../../lib/checkInstanceStatus';
+import { toast } from 'sonner';
 
 const SalasPage: React.FC = () => {
-  const [matricula, setMatricula] = useState('');
+  const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [contacts, setContacts] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [supportUser, setSupportUser] = useState<any>(null);
 
-  const handleMatriculaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setMatricula(e.target.value);
-  };
+  useEffect(() => {
+    // Verificar se o usuário está logado
+    const supportUserData = sessionStorage.getItem('support_user');
+    
+    if (!supportUserData) {
+      toast.error('Sessão expirada. Faça login novamente.');
+      navigate('/support-login');
+      return;
+    }
 
-  const handleAccessRooms = async () => {
+    const user = JSON.parse(supportUserData);
+    setSupportUser(user);
+    loadContacts();
+  }, [navigate]);
+
+  const loadContacts = async () => {
     setIsLoading(true);
     setError(null);
     setContacts([]);
 
     try {
-      const { data: admin, error: adminError } = await supabase
-        .from('support_users')
-        .select('matricula')
-        .eq('matricula', matricula)
-        .single();
-
-      if (adminError || !admin) {
-        setError('Matrícula não encontrada ou inválida.');
-        setIsLoading(false);
-        return;
-      }
-
       const instanceName = 'default';
       const apiKeyEvolution = import.meta.env.VITE_EVO_API_KEY as string;
 
@@ -55,23 +56,29 @@ const SalasPage: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-purple-500 via-pink-500 to-blue-500 p-4">
       <div className="w-full max-w-4xl bg-white rounded-lg shadow-lg p-6">
-        <h1 className="text-2xl font-bold mb-4">Salas de Atendimento</h1>
-        <div className="flex items-center mb-4">
-          <input
-            type="text"
-            value={matricula}
-            onChange={handleMatriculaChange}
-            placeholder="Digite sua matrícula"
-            className="flex-grow p-2 border rounded-l-md"
-          />
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">Salas de Atendimento</h1>
+            {supportUser && (
+              <p className="text-sm text-gray-600">Bem-vindo(a), {supportUser.full_name}</p>
+            )}
+          </div>
           <button
-            onClick={handleAccessRooms}
-            disabled={isLoading}
-            className="p-2 bg-blue-600 text-white rounded-r-md hover:bg-blue-700 disabled:bg-gray-400"
+            onClick={() => {
+              sessionStorage.removeItem('support_user');
+              navigate('/support-login');
+            }}
+            className="px-4 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded-md"
           >
-            {isLoading ? 'Buscando...' : 'Acessar'}
+            Sair
           </button>
         </div>
+
+        {isLoading && (
+          <div className="text-center p-8">
+            <p className="text-gray-600">Carregando contatos...</p>
+          </div>
+        )}
 
         {error && (
           <div className="text-center p-4 bg-red-100 text-red-700 rounded-md">
@@ -79,7 +86,7 @@ const SalasPage: React.FC = () => {
           </div>
         )}
 
-        {contacts.length > 0 && (
+        {!isLoading && contacts.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="col-span-1 bg-gray-100 p-4 rounded-lg">
               <h2 className="font-bold mb-2">Contatos</h2>
