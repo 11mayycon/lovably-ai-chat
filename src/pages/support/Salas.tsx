@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getWhatsAppChats, getWhatsAppMessages, sendWhatsAppMessage, WhatsAppChat, WhatsAppMessage } from '../../lib/whatsapp-wwebjs';
 import { toast } from 'sonner';
 import { LogOut, Search, MoreVertical, MessageCircle, Users, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -68,33 +67,78 @@ const SalasPage: React.FC = () => {
       }
 
       const adminOwnerId = rooms[0].admin_owner_id;
+      console.log('Buscando chats para admin:', adminOwnerId);
 
-      // Buscar chats diretamente via WWebJS
-      try {
-        const chats = await getWhatsAppChats(adminOwnerId);
+      // Buscar dados do administrador no Supabase
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data: whatsappData, error: whatsappError } = await supabase
+        .from('whatsapp_connections')
+        .select('instance_name, status')
+        .eq('admin_user_id', adminOwnerId)
+        .eq('status', 'connected')
+        .maybeSingle();
+
+      if (whatsappError) {
+        console.error('Erro ao buscar conexão WhatsApp:', whatsappError);
+        setError('Erro ao verificar conexão WhatsApp do administrador.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!whatsappData || !whatsappData.instance_name) {
+        console.log('Nenhuma conexão WhatsApp ativa encontrada para admin:', adminOwnerId);
+        setError('Nenhuma conta WhatsApp está conectada. Informe o administrador responsável para realizar a conexão no painel de administração.');
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('Instância WhatsApp encontrada:', whatsappData.instance_name);
+
+      // Buscar conversas usando edge function
+      const { data: chatsData, error: chatsError } = await supabase.functions.invoke('get-whatsapp-chats', {
+        body: { instanceName: whatsappData.instance_name }
+      });
+
+      console.log('Resposta da edge function:', chatsData);
+
+      if (chatsError) {
+        console.error('Erro ao buscar chats:', chatsError);
+        setError('Erro ao buscar conversas do WhatsApp.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!chatsData) {
+        setError('Nenhuma resposta da API.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (!chatsData.success) {
+        console.error('API retornou erro:', chatsData.error, chatsData.details);
+        setError(chatsData.error || 'Erro ao buscar conversas do WhatsApp.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (chatsData.chats && Array.isArray(chatsData.chats) && chatsData.chats.length > 0) {
+        const formattedContacts = chatsData.chats.map((chat: any) => ({
+          id: chat.id,
+          profilePicUrl: chat.profilePicUrl,
+          pushName: chat.pushName || chat.name,
+          name: chat.name,
+          lastMessage: chat.lastMessage ? {
+            body: chat.lastMessage,
+            timestamp: chat.lastMessageTimestamp
+          } : undefined,
+          unreadCount: chat.unreadCount || 0
+        }));
         
-        if (chats && chats.length > 0) {
-          // Converter formato WWebJS para formato esperado
-          const formattedContacts = chats.map((chat: WhatsAppChat) => ({
-            id: chat.id,
-            profilePicUrl: chat.profilePicUrl,
-            pushName: chat.pushName || chat.name,
-            name: chat.name,
-            lastMessage: chat.lastMessage,
-            unreadCount: chat.unreadCount || 0
-          }));
-          
-          setContacts(formattedContacts);
-        } else {
-          setError('Nenhum contato encontrado. O administrador pode não ter WhatsApp conectado.');
-        }
-      } catch (err: any) {
-        console.error('Erro ao buscar chats:', err);
-        if (err.message.includes('Sessão não está pronta')) {
-          setError('Nenhuma conta WhatsApp está conectada. Informe o administrador responsável para realizar a conexão no painel de administração.');
-        } else {
-          setError(err.message || 'Erro ao buscar contatos do WhatsApp.');
-        }
+        console.log('Contatos formatados:', formattedContacts.length);
+        setContacts(formattedContacts);
+      } else {
+        console.log('Nenhuma conversa encontrada ou array vazio');
+        setError('Nenhuma conversa encontrada. Aguarde novas mensagens no WhatsApp.');
       }
     } catch (err) {
       console.error('Erro ao buscar contatos:', err);
