@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getEvolutionContacts } from '../../lib/getEvolutionContacts';
-import { checkInstanceStatus } from '../../lib/checkInstanceStatus';
+import { getWhatsAppChats, getWhatsAppMessages, sendWhatsAppMessage, WhatsAppChat, WhatsAppMessage } from '../../lib/whatsapp-wwebjs';
 import { toast } from 'sonner';
 import { LogOut, Search, MoreVertical, MessageCircle, Users, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -70,45 +69,33 @@ const SalasPage: React.FC = () => {
 
       const adminOwnerId = rooms[0].admin_owner_id;
 
-      // Buscar dados do administrador no Supabase
-      const { supabase } = await import('@/integrations/supabase/client');
-      const { data: adminData, error: adminError } = await supabase
-        .from('administrators')
-        .select('instance_name, api_key_evolution')
-        .eq('id', adminOwnerId)
-        .single();
-
-      if (adminError || !adminData) {
-        console.error('Erro ao buscar administrador:', adminError);
-        setError('Erro ao buscar dados do administrador.');
-        setIsLoading(false);
-        return;
+      // Buscar chats diretamente via WWebJS
+      try {
+        const chats = await getWhatsAppChats(adminOwnerId);
+        
+        if (chats && chats.length > 0) {
+          // Converter formato WWebJS para formato esperado
+          const formattedContacts = chats.map((chat: WhatsAppChat) => ({
+            id: chat.id,
+            profilePicUrl: chat.profilePicUrl,
+            pushName: chat.pushName || chat.name,
+            name: chat.name,
+            lastMessage: chat.lastMessage,
+            unreadCount: chat.unreadCount || 0
+          }));
+          
+          setContacts(formattedContacts);
+        } else {
+          setError('Nenhum contato encontrado. O administrador pode não ter WhatsApp conectado.');
+        }
+      } catch (err: any) {
+        console.error('Erro ao buscar chats:', err);
+        if (err.message.includes('Sessão não está pronta')) {
+          setError('Nenhuma conta WhatsApp está conectada. Informe o administrador responsável para realizar a conexão no painel de administração.');
+        } else {
+          setError(err.message || 'Erro ao buscar contatos do WhatsApp.');
+        }
       }
-
-      const { instance_name, api_key_evolution } = adminData;
-
-      if (!instance_name || !api_key_evolution) {
-        setError('Instância WhatsApp não configurada. Entre em contato com o administrador.');
-        setIsLoading(false);
-        return;
-      }
-
-      const statusResponse = await checkInstanceStatus(instance_name, api_key_evolution);
-
-      if (statusResponse.state !== 'open') {
-        setError('Nenhuma conta WhatsApp está conectada. Informe o administrador responsável para realizar a conexão no painel de administração.');
-        setIsLoading(false);
-        return;
-      }
-
-      const contactsResponse = await getEvolutionContacts(instance_name, api_key_evolution);
-      
-      if (Array.isArray(contactsResponse)) {
-        setContacts(contactsResponse);
-      } else {
-        setError('Formato de resposta inesperado da API.');
-      }
-
     } catch (err) {
       console.error('Erro ao buscar contatos:', err);
       setError('Ocorreu um erro ao buscar os dados. Verifique sua conexão e tente novamente.');

@@ -1,370 +1,234 @@
 import { Router } from 'express';
-import axios from 'axios';
 import { query } from '../config/database';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
+import { wwebManager } from '../services/wweb-client';
 
 const router = Router();
-const EVO_BASE_URL = process.env.EVO_BASE_URL;
-const EVO_API_KEY = process.env.EVO_API_KEY;
 
-// Create WhatsApp instance
-router.post('/create-instance', authenticateToken, requireAdmin, async (req, res) => {
+// Initialize WhatsApp session (Generate QR Code)
+router.post('/init-session', authenticateToken, requireAdmin, async (req: AuthRequest, res) => {
   try {
-    const { instanceName } = req.body;
-
-    if (!instanceName) {
-      return res.status(400).json({ success: false, error: 'instanceName é obrigatório' });
+    const adminId = req.user?.userId;
+    
+    if (!adminId) {
+      return res.status(401).json({ success: false, error: 'Usuário não autenticado' });
     }
 
-    // Check if instance already exists in database
-    const existingInstance = await query(
-      'SELECT * FROM whatsapp_connections WHERE instance_name = $1',
-      [instanceName]
-    );
-
-    if (existingInstance.rows.length > 0) {
-      return res.status(409).json({ 
-        success: false, 
-        error: 'Instância já existe. Use o botão QR Code para reconectar.' 
+    // Verificar se já está conectado
+    const status = await wwebManager.getStatus(adminId);
+    if (status.connected) {
+      return res.json({ 
+        success: true, 
+        message: 'WhatsApp já está conectado',
+        phoneNumber: status.phoneNumber
       });
     }
 
-    const response = await axios.post(
-      `${EVO_BASE_URL}/instance/create`,
-      {
-        instanceName,
-        token: EVO_API_KEY,
-        qrcode: true,
-        integration: 'WHATSAPP-BAILEYS'
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: EVO_API_KEY
-        }
-      }
-    );
-
-    // Save instance to database
-    await query(
-      `INSERT INTO whatsapp_connections (instance_name, status, created_at, updated_at) 
-       VALUES ($1, $2, NOW(), NOW()) 
-       ON CONFLICT (instance_name) 
-       DO UPDATE SET status = $2, updated_at = NOW()`,
-      [instanceName, 'created']
-    );
-
-    res.json({ success: true, data: response.data });
-  } catch (error: any) {
-    console.error('Create instance error:', error.response?.data || error);
+    // Inicializar nova sessão e gerar QR Code
+    const qrCode = await wwebManager.initializeSession(adminId);
     
-    // Handle specific Evolution API errors
-    if (error.response?.status === 409 || error.response?.data?.message?.includes('already exists')) {
-      return res.status(409).json({ 
+    res.json({ 
+      success: true, 
+      qrCode,
+      message: 'QR Code gerado. Escaneie com seu WhatsApp.'
+    });
+  } catch (error: any) {
+    console.error('Init session error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Erro ao inicializar sessão WhatsApp' 
+    });
+  }
+});
+
+// Get session status
+router.get('/status', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const adminId = req.user?.userId;
+    
+    if (!adminId) {
+      return res.status(401).json({ success: false, error: 'Usuário não autenticado' });
+    }
+
+    const status = await wwebManager.getStatus(adminId);
+    res.json({ success: true, data: status });
+  } catch (error: any) {
+    console.error('Get status error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Erro ao buscar status da sessão' 
+    });
+  }
+});
+
+// Get QR Code (if still waiting)
+router.get('/qrcode', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const adminId = req.user?.userId;
+    
+    if (!adminId) {
+      return res.status(401).json({ success: false, error: 'Usuário não autenticado' });
+    }
+
+    const status = await wwebManager.getStatus(adminId);
+    
+    if (status.qrCode) {
+      res.json({ success: true, qrCode: status.qrCode });
+    } else {
+      res.json({ 
         success: false, 
-        error: 'Instância já existe. Use o botão QR Code para reconectar.' 
+        message: 'QR Code não disponível. Inicie uma nova sessão ou aguarde.' 
       });
     }
+  } catch (error: any) {
+    console.error('Get QR code error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Erro ao buscar QR code' 
+    });
+  }
+});
+
+// Disconnect WhatsApp
+router.post('/disconnect', authenticateToken, requireAdmin, async (req: AuthRequest, res) => {
+  try {
+    const adminId = req.user?.userId;
     
-    res.status(500).json({ 
-      success: false, 
-      error: error.response?.data?.message || 'Erro ao criar instância' 
-    });
-  }
-});
-
-// Get instance status
-router.get('/instance-status/:instanceName', authenticateToken, async (req, res) => {
-  try {
-    const { instanceName } = req.params;
-
-    const response = await axios.get(
-      `${EVO_BASE_URL}/instance/connectionState/${instanceName}`,
-      {
-        headers: { apikey: EVO_API_KEY }
-      }
-    );
-
-    // Update status in database
-    const status = response.data.instance?.state === 'open' ? 'connected' : 'disconnected';
-    await query(
-      `UPDATE whatsapp_connections SET status = $1, updated_at = NOW() WHERE instance_name = $2`,
-      [status, instanceName]
-    );
-
-    res.json({ success: true, data: response.data });
-  } catch (error: any) {
-    console.error('Get instance status error:', error.response?.data || error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.response?.data?.message || 'Erro ao buscar status da instância' 
-    });
-  }
-});
-
-// Get QR Code
-router.get('/qrcode/:instanceName', authenticateToken, async (req, res) => {
-  try {
-    const { instanceName } = req.params;
-
-    const response = await axios.get(
-      `${EVO_BASE_URL}/instance/connect/${instanceName}`,
-      {
-        headers: { apikey: EVO_API_KEY }
-      }
-    );
-
-    res.json({ success: true, data: response.data });
-  } catch (error: any) {
-    console.error('Get QR code error:', error.response?.data || error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.response?.data?.message || 'Erro ao buscar QR code' 
-    });
-  }
-});
-
-// Delete instance
-router.delete('/instance/:instanceName', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { instanceName } = req.params;
-
-    const response = await axios.delete(
-      `${EVO_BASE_URL}/instance/delete/${instanceName}`,
-      {
-        headers: { apikey: EVO_API_KEY }
-      }
-    );
-
-    // Remove from database
-    await query(
-      `DELETE FROM whatsapp_connections WHERE instance_name = $1`,
-      [instanceName]
-    );
-
-    res.json({ success: true, data: response.data });
-  } catch (error: any) {
-    console.error('Delete instance error:', error.response?.data || error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.response?.data?.message || 'Erro ao deletar instância' 
-    });
-  }
-});
-
-// List all instances
-router.get('/instances', authenticateToken, async (req, res) => {
-  try {
-    const response = await axios.get(
-      `${EVO_BASE_URL}/instance/fetchInstances`,
-      {
-        headers: { apikey: EVO_API_KEY }
-      }
-    );
-
-    res.json({ success: true, data: response.data });
-  } catch (error: any) {
-    console.error('List instances error:', error.response?.data || error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.response?.data?.message || 'Erro ao listar instâncias' 
-    });
-  }
-});
-
-// Restart instance
-router.post('/restart-instance/:instanceName', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { instanceName } = req.params;
-
-    const response = await axios.put(
-      `${EVO_BASE_URL}/instance/restart/${instanceName}`,
-      {},
-      {
-        headers: { apikey: EVO_API_KEY }
-      }
-    );
-
-    res.json({ success: true, data: response.data });
-  } catch (error: any) {
-    console.error('Restart instance error:', error.response?.data || error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.response?.data?.message || 'Erro ao reiniciar instância' 
-    });
-  }
-});
-
-// Logout instance
-router.post('/logout-instance/:instanceName', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { instanceName } = req.params;
-
-    const response = await axios.delete(
-      `${EVO_BASE_URL}/instance/logout/${instanceName}`,
-      {
-        headers: { apikey: EVO_API_KEY }
-      }
-    );
-
-    // Update status in database
-    await query(
-      `UPDATE whatsapp_connections SET status = $1, updated_at = NOW() WHERE instance_name = $2`,
-      ['disconnected', instanceName]
-    );
-
-    res.json({ success: true, data: response.data });
-  } catch (error: any) {
-    console.error('Logout instance error:', error.response?.data || error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.response?.data?.message || 'Erro ao desconectar instância' 
-    });
-  }
-});
-
-// Get connected WhatsApp instance
-router.get('/connected-instance', authenticateToken, async (req, res) => {
-  try {
-    const result = await query(
-      `SELECT instance_name, status FROM whatsapp_connections 
-       WHERE status = $1 
-       ORDER BY updated_at DESC 
-       LIMIT 1`,
-      ['connected']
-    );
-
-    res.json({ success: true, instance: result.rows[0] || null });
-  } catch (error) {
-    console.error('Get connected instance error:', error);
-    res.status(500).json({ success: false, error: 'Erro ao buscar instância conectada' });
-  }
-});
-
-// Get WhatsApp connections from database
-router.get('/contacts', authenticateToken, async (req, res) => {
-  try {
-    const result = await query(
-      `SELECT id, instance_name, status, created_at, updated_at 
-       FROM whatsapp_connections 
-       ORDER BY created_at DESC`
-    );
-
-    res.json({ success: true, data: result.rows });
-  } catch (error) {
-    console.error('Get WhatsApp connections error:', error);
-    res.status(500).json({ success: false, error: 'Erro ao buscar conexões WhatsApp' });
-  }
-});
-
-// Get WhatsApp contacts from Evolution API
-router.post('/contacts', authenticateToken, async (req, res) => {
-  try {
-    const { instanceName } = req.body;
-
-    if (!instanceName) {
-      return res.status(400).json({ success: false, error: 'instanceName é obrigatório' });
+    if (!adminId) {
+      return res.status(401).json({ success: false, error: 'Usuário não autenticado' });
     }
 
-    const response = await axios.get(
-      `${EVO_BASE_URL}/contact/findContacts/${instanceName}`,
-      {
-        headers: { apikey: EVO_API_KEY }
-      }
-    );
+    await wwebManager.disconnect(adminId);
+    res.json({ success: true, message: 'WhatsApp desconectado com sucesso' });
+  } catch (error: any) {
+    console.error('Disconnect error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Erro ao desconectar WhatsApp' 
+    });
+  }
+});
 
-    const contacts = response.data
-      .filter((contact: any) => contact.id && contact.id.includes('@'))
-      .map((contact: any) => ({
-        id: contact.id,
-        name: contact.pushName || contact.id.split('@')[0],
-        phone: contact.id.split('@')[0],
-        profilePicUrl: contact.profilePicUrl,
-        isGroup: contact.id.includes('@g.us'),
-        lastSeen: contact.lastSeen
-      }))
-      .slice(0, 50);
+// Get chats (similar to Evolution API /chat/getChats)
+router.get('/chats', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const adminId = req.user?.userId || req.query.adminId as string;
+    
+    if (!adminId) {
+      return res.status(401).json({ success: false, error: 'Admin ID não fornecido' });
+    }
 
-    res.json({ success: true, contacts, total: contacts.length });
-  } catch (error) {
+    const chats = await wwebManager.getChats(adminId);
+    res.json({ success: true, data: chats });
+  } catch (error: any) {
+    console.error('Get chats error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Erro ao buscar conversas' 
+    });
+  }
+});
+
+// Get messages from a specific chat
+router.get('/messages/:chatId', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const adminId = req.user?.userId || req.query.adminId as string;
+    const { chatId } = req.params;
+    const limit = parseInt(req.query.limit as string) || 50;
+    
+    if (!adminId) {
+      return res.status(401).json({ success: false, error: 'Admin ID não fornecido' });
+    }
+
+    const messages = await wwebManager.getMessages(adminId, chatId, limit);
+    res.json({ success: true, data: messages });
+  } catch (error: any) {
+    console.error('Get messages error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Erro ao buscar mensagens' 
+    });
+  }
+});
+
+// Get contacts
+router.get('/contacts', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const adminId = req.user?.userId || req.query.adminId as string;
+    
+    if (!adminId) {
+      return res.status(401).json({ success: false, error: 'Admin ID não fornecido' });
+    }
+
+    const contacts = await wwebManager.getContacts(adminId);
+    res.json({ success: true, data: contacts });
+  } catch (error: any) {
     console.error('Get contacts error:', error);
-    res.status(500).json({ success: false, error: 'Erro ao buscar contatos' });
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Erro ao buscar contatos' 
+    });
   }
 });
 
 // Send WhatsApp message
-router.post('/send-message', authenticateToken, async (req, res) => {
+router.post('/send-message', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { phoneNumber, message, instanceName } = req.body;
+    const adminId = req.user?.userId || req.body.adminId;
+    const { phoneNumber, message } = req.body;
+
+    if (!adminId) {
+      return res.status(401).json({ success: false, error: 'Admin ID não fornecido' });
+    }
 
     if (!phoneNumber || !message) {
-      return res.status(400).json({ error: 'phoneNumber e message são obrigatórios' });
+      return res.status(400).json({ 
+        success: false, 
+        error: 'phoneNumber e message são obrigatórios' 
+      });
     }
 
     const formattedPhone = phoneNumber.replace(/\D/g, '');
-    const number = `${formattedPhone}@s.whatsapp.net`;
+    const response = await wwebManager.sendMessage(adminId, formattedPhone, message);
 
-    const payload = {
-      number,
-      text: message
-    };
-
-    const response = await axios.post(
-      `${EVO_BASE_URL}/message/sendText/${instanceName}`,
-      payload,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: EVO_API_KEY
-        }
-      }
-    );
-
-    res.json({ success: true, data: response.data });
+    res.json({ success: true, data: response });
   } catch (error: any) {
-    console.error('Send message error:', error.response?.data || error);
+    console.error('Send message error:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.response?.data?.message || 'Erro ao enviar mensagem' 
+      error: error.message || 'Erro ao enviar mensagem' 
     });
   }
 });
 
-// Set WhatsApp webhook
-router.post('/set-webhook', authenticateToken, requireAdmin, async (req, res) => {
+// Restore session on server startup
+router.post('/restore-session', authenticateToken, requireAdmin, async (req: AuthRequest, res) => {
   try {
-    const { instanceName, webhookUrl } = req.body;
-
-    if (!instanceName || !webhookUrl) {
-      return res.status(400).json({ error: 'instanceName e webhookUrl são obrigatórios' });
+    const adminId = req.user?.userId;
+    
+    if (!adminId) {
+      return res.status(401).json({ success: false, error: 'Usuário não autenticado' });
     }
 
-    const response = await axios.post(
-      `${EVO_BASE_URL}/webhook/set/${instanceName}`,
-      {
-        url: webhookUrl,
-        webhook_by_events: true,
-        webhook_base64: false,
-        events: [
-          'MESSAGES_UPSERT',
-          'MESSAGES_UPDATE',
-          'CONNECTION_UPDATE'
-        ]
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: EVO_API_KEY
-        }
-      }
-    );
-
-    res.json({ success: true, data: response.data });
+    const qrCode = await wwebManager.restoreSession(adminId);
+    
+    if (qrCode) {
+      res.json({ 
+        success: true, 
+        message: 'Sessão restaurada. Escaneie o QR Code.',
+        qrCode
+      });
+    } else {
+      res.json({ 
+        success: true, 
+        message: 'Sessão restaurada com sucesso' 
+      });
+    }
   } catch (error: any) {
-    console.error('Set webhook error:', error.response?.data || error);
+    console.error('Restore session error:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.response?.data?.message || 'Erro ao configurar webhook' 
+      error: error.message || 'Erro ao restaurar sessão' 
     });
   }
 });
