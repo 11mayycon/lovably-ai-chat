@@ -1,1 +1,1 @@
-export const EVO_BASE_URL = import.meta.env.VITE_EVO_BASE_URL;
+export const EVO_BASE_URL = import.meta.env.VITE_EVO_BASE_URL || 'https://api.evolution.app';
