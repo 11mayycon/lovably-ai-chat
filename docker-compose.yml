@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  isa-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: isa-app
+    ports:
+      - "8082:80"
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - default

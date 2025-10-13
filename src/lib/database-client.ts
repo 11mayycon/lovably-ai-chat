@@ -1,38 +1,9 @@
-import axios from 'axios';
+import { supabase } from '../integrations/supabase/client';
 
-const API_BASE_URL = 'http://31.97.94.107:3001/api';
-
-// Cliente para comunicação com o backend local
+// Cliente para comunicação com o Supabase
 class DatabaseClient {
-  private baseURL: string;
-
-  constructor(baseURL: string = API_BASE_URL) {
-    this.baseURL = baseURL;
-  }
-
-  // Método genérico para fazer requisições
-  async request(method: 'GET' | 'POST' | 'PUT' | 'DELETE', endpoint: string, data?: any) {
-    try {
-      // Buscar token do localStorage
-      const token = localStorage.getItem('token');
-      
-      const response = await axios({
-        method,
-        url: `${this.baseURL}${endpoint}`,
-        data,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
-      });
-      return response.data;
-    } catch (error) {
-      console.error(`Erro na requisição ${method} ${endpoint}:`, error);
-      throw error;
-    }
-  }
-
-  // Métodos para WhatsApp
+  // Métodos para WhatsApp (a serem refatorados ou removidos)
+  /*
   async getWhatsAppContacts() {
     return this.request('GET', '/whatsapp/contacts');
   }
@@ -45,7 +16,7 @@ class DatabaseClient {
     return this.request('POST', '/whatsapp/send', { contactId, message });
   }
 
-  // Métodos para instâncias WhatsApp
+  // Métodos para instâncias WhatsApp (a serem refatorados ou removidos)
   async createWhatsAppInstance(instanceName: string) {
     return this.request('POST', '/whatsapp/create-instance', { instanceName });
   }
@@ -73,37 +44,57 @@ class DatabaseClient {
   async logoutInstance(instanceName: string) {
     return this.request('POST', `/whatsapp/logout-instance/${instanceName}`);
   }
+  */
 
   // Métodos para atendimentos
   async getAttendances() {
-    return this.request('GET', '/attendances');
+    const { data, error } = await supabase.from('attendances').select('*');
+    if (error) {
+      console.error('Erro ao buscar atendimentos:', error);
+      throw error;
+    }
+    return data;
   }
 
   async getAttendanceMessages(attendanceId: string) {
-    return this.request('GET', `/attendances/${attendanceId}/messages`);
+    // a ser implementado
   }
 
   async sendAttendanceMessage(attendanceId: string, message: string) {
-    return this.request('POST', `/attendances/${attendanceId}/messages`, { message });
+    // a ser implementado
   }
 
   // Métodos para IA
   async sendAIMessage(message: string, context?: any) {
-    return this.request('POST', '/ai/chat', { message, context });
+    // a ser implementado
   }
 
   // Métodos para autenticação
   async login(email: string, password: string) {
-    return this.request('POST', '/auth/login', { email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      console.error('Erro no login:', error);
+      throw error;
+    }
+    return data;
   }
 
   async logout() {
-    return this.request('POST', '/auth/logout');
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Erro no logout:', error);
+      throw error;
+    }
   }
 
   // Métodos para usuários de suporte
   async getSupportUsers() {
-    return this.request('GET', '/support/users');
+    const { data, error } = await supabase.from('support_users').select('*');
+    if (error) {
+      console.error('Erro ao buscar usuários de suporte:', error);
+      throw error;
+    }
+    return data;
   }
 
   // Método para simular real-time (substitui o Supabase channels)

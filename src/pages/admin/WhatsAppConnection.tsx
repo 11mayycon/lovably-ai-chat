@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db, WhatsAppInstance } from '../../lib/database';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { io, Socket } from 'socket.io-client';
 
 const WhatsAppConnection: React.FC = () => {
   const { user } = useAuth();
@@ -12,335 +13,54 @@ const WhatsAppConnection: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [showQrCode, setShowQrCode] = useState(false);
-  const [currentInstance, setCurrentInstance] = useState<string | null>(null);
-  const [isPolling, setIsPolling] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    loadConnections();
-  }, []);
+    const newSocket = io('https://isa.inovapro.cloud', { path: '/socket.io' });
+    setSocket(newSocket);
 
-  const loadConnections = async () => {
-    try {
-      setLoading(true);
-      const instances = await db.getInstances();
-      setConnections(instances);
-    } catch (error) {
-      console.error('Erro ao carregar conexões:', error);
-      setError('Erro ao carregar conexões WhatsApp');
-    } finally {
+    newSocket.on('qr', (qr) => {
+      setQrCode(qr);
+      setShowQrCode(true);
       setLoading(false);
-    }
-  };
+    });
 
-
-
-  // Função para extrair nome do usuário do email
-  const extractUsernameFromEmail = (email: string): string => {
-    const username = email.split('@')[0];
-    // Remove números e caracteres especiais, mantém apenas letras
-    return username.replace(/[^a-zA-Z]/g, '').toLowerCase();
-  };
-
-  // Polling para verificar status da conexão
-  const startStatusPolling = async (instanceName: string) => {
-    setIsPolling(true);
-    const pollInterval = setInterval(async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke('check-whatsapp-status', {
-          body: { instanceName }
-        });
-
-        if (error) throw error;
-
-        console.log('Status polling response:', data);
-
-        // Verificar tanto o status mapeado quanto o state da instância
-        const instanceState = data?.data?.instance?.state || data?.instance?.state;
-        const mappedStatus = data?.data?.status || data?.status;
-
-        console.log('Instance state:', instanceState, 'Mapped status:', mappedStatus);
-
-        // Considerar conectado se o state for 'open' OU o status mapeado for 'connected'
-        if (instanceState === 'open' || mappedStatus === 'connected') {
-          clearInterval(pollInterval);
-          setIsPolling(false);
-          setShowQrCode(false);
-          
-          // Atualizar status no banco local
-          await db.updateInstance(instanceName, { status: 'connected' });
-          await loadConnections();
-          setError(null);
-          
-          console.log('✅ Conexão estabelecida com sucesso!');
-        }
-      } catch (err) {
-        console.error('Erro no polling:', err);
-      }
-    }, 3000);
-
-    // Parar polling após 2 minutos
-    setTimeout(() => {
-      clearInterval(pollInterval);
-      setIsPolling(false);
-    }, 120000);
-  };
-
-  // Função para gerar QR Code com criação automática de instância
-  const generateQRCodeWithAutoInstance = async () => {
-    if (!user?.email) {
-      setError('Email do usuário não encontrado');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const username = extractUsernameFromEmail(user.email);
-      const instanceName = `${username}_whatsapp`;
-      setCurrentInstance(instanceName);
-      
-      console.log('Gerando QR Code para instância:', instanceName);
-      
-      // Primeiro, tentar deletar instância existente (se houver)
-      try {
-        await supabase.functions.invoke('delete-whatsapp-instance', {
-          body: { instanceName }
-        });
-        await db.deleteInstance(instanceName);
-        console.log('Instância anterior deletada');
-      } catch (deleteError) {
-        console.log('Nenhuma instância anterior para deletar');
-      }
-
-      // Aguardar um pouco antes de criar nova instância
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Criar instância no banco local
-      await db.createInstance(instanceName);
-      
-      // Criar instância via Edge Function
-      const { data: createResult, error: createError } = await supabase.functions.invoke('create-whatsapp-instance', {
-        body: { instanceName }
-      });
-
-      console.log('Resposta da criação:', createResult, 'Erro:', createError);
-
-      if (createError || !createResult?.success) {
-        throw new Error(createResult?.error || createError?.message || 'Erro ao criar instância');
-      }
-
-      // Se a resposta já contém o QR code, usar diretamente
-      if (createResult?.qrCode?.base64) {
-        let base64Image = createResult.qrCode.base64;
-        if (!base64Image.startsWith('data:image/')) {
-          base64Image = `data:image/png;base64,${base64Image}`;
-        }
-        console.log('QR Code recebido na criação:', base64Image.substring(0, 50) + '...');
-        setQrCode(base64Image);
-        setShowQrCode(true);
-        startStatusPolling(instanceName);
-        await loadConnections();
-        return;
-      }
-
-      // Aguardar um pouco e buscar QR code
-      setTimeout(async () => {
-        await getQRCode(instanceName);
-        startStatusPolling(instanceName);
-      }, 2000);
-
-      await loadConnections();
-    } catch (error: any) {
-      console.error('Erro ao gerar QR Code:', error);
-      setError(error.message || 'Erro ao gerar QR Code. Verifique se as credenciais da Evolution API estão configuradas.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-
-  const getQRCode = async (instance: string) => {
-    try {
-      setLoading(true);
-      setCurrentInstance(instance);
-      
-      const { data: response, error: qrError } = await supabase.functions.invoke('get-whatsapp-qrcode', {
-        body: { instanceName: instance }
-      });
-
-      console.log('Resposta QR Code:', response);
-
-      if (qrError) throw qrError;
-
-      // A resposta vem como { success: true, data: { base64: "...", code: "..." } }
-      const qrData = response?.data;
-      
-      if (qrData?.base64) {
-        // Garantir que o base64 tem o prefixo correto
-        let base64Image = qrData.base64;
-        if (!base64Image.startsWith('data:image/')) {
-          base64Image = `data:image/png;base64,${base64Image}`;
-        }
-        console.log('QR Code configurado:', base64Image.substring(0, 50) + '...');
-        setQrCode(base64Image);
-        setShowQrCode(true);
-        startStatusPolling(instance);
-      } else {
-        console.error('QR Code não encontrado na resposta:', response);
-        setError('QR Code não disponível. Tente novamente.');
-      }
-    } catch (error: any) {
-      console.error('Erro ao buscar QR code:', error);
-      setError(error.message || 'Erro ao buscar QR code');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteInstance = async (instance: string) => {
-    if (!confirm('Tem certeza que deseja deletar esta instância?')) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-      
-      const { data: result, error: deleteError } = await supabase.functions.invoke('delete-whatsapp-instance', {
-        body: { instanceName: instance }
-      });
-
-      if (deleteError || !result?.success) {
-        throw new Error(result?.error || deleteError?.message || 'Erro ao deletar instância');
-      }
-
-      await db.deleteInstance(instance);
-      await loadConnections();
-    } catch (error: any) {
-      console.error('Erro ao deletar instância:', error);
-      setError(error.message || 'Erro ao deletar instância');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const restartInstance = async (instance: string) => {
-    try {
-      setLoading(true);
-      
-      // Deletar e recriar instância
-      await deleteInstance(instance);
-      
-      setTimeout(async () => {
-        const { data: result, error: createError } = await supabase.functions.invoke('create-whatsapp-instance', {
-          body: { instanceName: instance }
-        });
-
-        if (createError || !result?.success) {
-          throw new Error(result?.error || createError?.message || 'Erro ao recriar instância');
-        }
-        
-        await loadConnections();
-      }, 1000);
-    } catch (error: any) {
-      console.error('Erro ao reiniciar instância:', error);
-      setError(error.message || 'Erro ao reiniciar instância');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const logoutInstance = async (instance: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Deletar a instância da Evolution API
-      const { data: result, error: deleteError } = await supabase.functions.invoke('delete-whatsapp-instance', {
-        body: { instanceName: instance }
-      });
-
-      if (deleteError || !result?.success) {
-        throw new Error(result?.error || deleteError?.message || 'Erro ao excluir instância');
-      }
-
-      // Remover do banco de dados local
-      await db.deleteInstance(instance);
-      
-      // Limpar estados para mostrar botão de QR code novamente
-      setQrCode(null);
+    newSocket.on('ready', () => {
+      setIsConnected(true);
       setShowQrCode(false);
-      setCurrentInstance(null);
-      setIsPolling(false);
-      
+      setQrCode(null);
       toast({
-        title: "Sucesso",
-        description: "WhatsApp desconectado com sucesso",
+        title: 'Sucesso',
+        description: 'WhatsApp conectado com sucesso!',
       });
-      
-      await loadConnections();
-    } catch (error: any) {
-      console.error('Erro ao desconectar instância:', error);
-      setError(error.message || 'Erro ao desconectar instância');
+    });
+
+    newSocket.on('disconnected', () => {
+      setIsConnected(false);
       toast({
-        title: "Erro",
-        description: error.message || "Erro ao desconectar instância",
-        variant: "destructive",
+        title: 'Aviso',
+        description: 'WhatsApp desconectado.',
+        variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
+    });
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, [toast]);
+
+  const handleConnect = () => {
+    setLoading(true);
+    setError(null);
+    if (socket) {
+      socket.emit('connect-whatsapp');
     }
   };
 
-  const confirmAlreadyConnected = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      let instanceName = currentInstance;
-      if (!instanceName) {
-        if (!user?.email) {
-          setError('Email do usuário não encontrado');
-          return;
-        }
-        const username = extractUsernameFromEmail(user.email);
-        instanceName = `${username}_whatsapp`;
-        setCurrentInstance(instanceName);
-      }
-
-      console.log('Confirmando conexão manualmente para:', instanceName);
-      const { data, error } = await supabase.functions.invoke('check-whatsapp-status', {
-        body: { instanceName }
-      });
-
-      if (error) throw error;
-
-      const instanceState = data?.data?.instance?.state || data?.instance?.state;
-      const mappedStatus = data?.data?.status || data?.status;
-      console.log('Confirmação manual - state:', instanceState, 'mapped:', mappedStatus);
-
-      if (instanceState === 'open' || mappedStatus === 'connected') {
-        await db.updateInstance(instanceName!, { status: 'connected' });
-        setShowQrCode(false);
-        setQrCode(null);
-        setIsPolling(false);
-        await loadConnections();
-        console.log('✅ Conexão confirmada manualmente.');
-        try {
-          // Opcional: força sincronização/consulta do backend para refletir no painel
-          await supabase.functions.invoke('get-connected-whatsapp-instance');
-        } catch (syncErr) {
-          console.log('Sync opcional falhou ou não necessária:', syncErr);
-        }
-      } else {
-        setError('Ainda não conectado. Continue aguardando e tente novamente.');
-      }
-    } catch (err: any) {
-      console.error('Erro ao confirmar conexão:', err);
-      setError(err.message || 'Erro ao confirmar conexão');
-    } finally {
-      setLoading(false);
+  const handleDisconnect = () => {
+    if (socket) {
+      socket.emit('disconnect-whatsapp');
     }
   };
 
@@ -367,9 +87,7 @@ const WhatsAppConnection: React.FC = () => {
               </div>
             )}
 
-            {/* Verificar se está conectado */}
-            {!showQrCode && connections.some((c) => c.status === 'connected') ? (
-              // Cartão "Conectado" com ações
+            {isConnected ? (
               <div className="text-center space-y-6 py-12 animate-in fade-in slide-in-from-bottom-4">
                 <div className="w-24 h-24 mx-auto bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-full flex items-center justify-center border-2 border-green-500/40">
                   <svg className="w-12 h-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -382,38 +100,21 @@ const WhatsAppConnection: React.FC = () => {
                     ✅ WhatsApp Conectado
                   </h2>
                   <p className="text-muted-foreground text-sm mb-1">
-                    Instância: <span className="font-semibold text-foreground">{connections.find((c) => c.status === 'connected')?.instance_name}</span>
-                  </p>
-                  <p className="text-muted-foreground text-xs">
                     Sua conexão está ativa e funcionando
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto">
                   <button
-                    onClick={() => {
-                      const instance = connections.find((c) => c.status === 'connected')?.instance_name;
-                      if (instance) logoutInstance(instance);
-                    }}
+                    onClick={handleDisconnect}
                     disabled={loading}
                     className="px-6 py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-600 dark:text-amber-400 rounded-xl font-semibold transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-50"
                   >
                     Desconectar
                   </button>
-                  <button
-                    onClick={() => {
-                      const instance = connections.find((c) => c.status === 'connected')?.instance_name;
-                      if (instance) restartInstance(instance);
-                    }}
-                    disabled={loading}
-                    className="px-6 py-3 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-600 dark:text-blue-400 rounded-xl font-semibold transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-50"
-                  >
-                    Reiniciar
-                  </button>
                 </div>
               </div>
             ) : !showQrCode ? (
-              // Estado inicial: Pronto para conectar
               <div className="text-center space-y-6 py-12">
                 <div className="w-24 h-24 mx-auto bg-gradient-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center">
                   <svg className="w-12 h-12 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -431,7 +132,7 @@ const WhatsAppConnection: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={generateQRCodeWithAutoInstance}
+                  onClick={handleConnect}
                   disabled={loading}
                   className="group relative px-8 py-4 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 disabled:from-muted disabled:to-muted text-primary-foreground rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02] disabled:scale-100 disabled:cursor-not-allowed"
                 >
@@ -460,7 +161,7 @@ const WhatsAppConnection: React.FC = () => {
                     <div className="flex justify-center py-8">
                       <div className="bg-background p-6 rounded-2xl shadow-xl border-2 border-primary/20">
                         <img
-                          src={qrCode}
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrCode)}`}
                           alt="QR Code WhatsApp"
                           className="w-80 h-80 block"
                           onError={(e) => {
@@ -476,34 +177,6 @@ const WhatsAppConnection: React.FC = () => {
                       <h3 className="text-xl font-bold text-foreground">
                         Escaneie com seu WhatsApp
                       </h3>
-
-                      {isPolling && (
-                        <div className="flex items-center justify-center gap-2 text-primary animate-pulse">
-                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                          <span className="ml-2 font-medium">Aguardando conexão...</span>
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <button
-                          onClick={confirmAlreadyConnected}
-                          disabled={loading}
-                          className="w-full px-4 py-3 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 disabled:from-muted disabled:to-muted text-primary-foreground rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl"
-                        >
-                          {loading ? 'Verificando...' : 'Já conectei'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowQrCode(false);
-                            setQrCode(null);
-                          }}
-                          className="w-full px-4 py-3 bg-secondary hover:bg-secondary/80 text-secondary-foreground rounded-xl font-medium transition-colors"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
                     </div>
                   </>
                 ) : (

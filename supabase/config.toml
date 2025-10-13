@@ -1,5 +1,8 @@
 project_id = "grlyhylqbekhrmfwgyme"
 
+[rest]
+cors_allowed_origins = ["https://isa.inovapro.cloud", "http://localhost:8082", "http://localhost:3000"]
+
 [functions.create-first-admin]
 verify_jwt = false
 
