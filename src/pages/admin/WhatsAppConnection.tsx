@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { db, WhatsAppInstance } from '../../lib/database';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { io, Socket } from 'socket.io-client';
+import io from 'socket.io-client';
 
 const WhatsAppConnection: React.FC = () => {
   const { user } = useAuth();
@@ -14,7 +14,7 @@ const WhatsAppConnection: React.FC = () => {
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [showQrCode, setShowQrCode] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const [socket, setSocket] = useState<ReturnType<typeof io> | null>(null);
 
   useEffect(() => {
     const newSocket = io('https://isa.inovapro.cloud', { path: '/socket.io' });

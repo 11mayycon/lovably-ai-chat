@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import io, { Socket } from 'socket.io-client';
+import io from 'socket.io-client';
 import { toast } from 'sonner';
 import { LogOut, Search, MoreVertical, MessageCircle, Users, AlertCircle, Loader2, Send, Sparkles, CornerDownLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,7 @@ interface Message {
 
 const SalasPage: React.FC = () => {
   const navigate = useNavigate();
-  const [socket, setSocket] = useState<import('socket.io-client').Socket | null>(null);
+  const [socket, setSocket] = useState<ReturnType<typeof io> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
