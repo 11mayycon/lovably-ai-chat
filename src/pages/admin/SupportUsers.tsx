@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { supabasePublic } from "@/lib/supabase-public-client";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Edit, Trash2, UserCheck, UserX, IdCard } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
@@ -44,7 +44,7 @@ export default function SupportUsers() {
 
   const loadUsers = async () => {
     try {
-      const { data, error } = await supabasePublic
+      const { data, error } = await supabase
         .from("support_users")
         .select("*")
         .order("created_at", { ascending: false });
@@ -67,7 +67,7 @@ export default function SupportUsers() {
 
     try {
       if (editingUser) {
-        const { error } = await supabasePublic
+        const { error } = await supabase
           .from("support_users")
           .update({
             full_name: formData.full_name,
@@ -80,7 +80,7 @@ export default function SupportUsers() {
         if (error) throw error;
         toast.success("Usuário atualizado com sucesso!");
       } else {
-        const { error } = await supabasePublic
+        const { error } = await supabase
           .from("support_users")
           .insert({
             full_name: formData.full_name,
@@ -109,7 +109,7 @@ export default function SupportUsers() {
 
   const toggleActive = async (user: any) => {
     try {
-      const { error } = await supabasePublic
+      const { error } = await supabase
         .from("support_users")
         .update({ is_active: !user.is_active })
         .eq("id", user.id);
@@ -127,7 +127,7 @@ export default function SupportUsers() {
     if (!confirm("Tem certeza que deseja excluir este usuário?")) return;
 
     try {
-      const { error } = await supabasePublic
+      const { error } = await supabase
         .from("support_users")
         .delete()
         .eq("id", id);
